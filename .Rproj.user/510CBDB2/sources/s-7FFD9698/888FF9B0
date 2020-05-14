@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1589466045210.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1284674248",
+    "id" : "888FF9B0",
+    "lastKnownWriteTime" : 1589466063,
+    "last_content_update" : 1589466063233,
+    "path" : "~/Shiu Lab - R/Current/DEPI_outliers.R",
+    "project_path" : "DEPI_outliers.R",
+    "properties" : {
+        "cursorPosition" : "16,10",
+        "scrollLine" : "8"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

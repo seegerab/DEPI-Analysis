@@ -297,9 +297,9 @@ cell_371_data <- data.frame(feb_data%>%
                               group_by(time_point)%>%
                               mutate(log2_fold = (log2((median)/(median[genotype == "Col0"])))))
 for (element in genotype_combinations){
-  for (m in c("leafarea", "npq", "phi2")){
+  for (m in c("npq", "leafarea", "phi2")){
     data <- filter(cell_371_data, genotype %in% element, measurement == m)
-    #data$genotype <- reorder(data$genotype, data$number_2)
+    data$genotype <- reorder(data$genotype, data$number_2)
     plot <- ggplot(data = data, aes(x = time_point, y = genotype, fill = log2_fold)) + 
       labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = paste(m, "Log 2 Fold Change"))+
       geom_tile(width = 10 , height = 20)+
@@ -331,6 +331,54 @@ invest <- feb_data%>%
   summarize(count = n())
 
 time_4 <- feb_data%>%
-  filter(day == "4")%>%
-  group_by(day, plant_ID)%>%
+  filter(time_point == "0")%>%
+  group_by(genotype, measurement)%>%
   summarize(count = n())
+
+filter(feb_data, genotype == "mpk1", time_point == "1")
+
+sort(filter(feb_data, genotype == "Col0", measurement == "npq", time_point == "0")$measured_value)
+f = sort(filter(feb_data, genotype == "mpk1", measurement == "npq", time_point == "0")$measured_value)/med_test
+med_test = median(sort(filter(feb_data, genotype == "Col0", measurement == "npq", time_point == "0")$measured_value)
+)
+
+hist(filter(feb_data,measurement == "npq")$measured_value)
+abline(v = 0.83)
+
+cell_370_example<- feb_data%>%
+  filter(genotype == "Col0", measurement == "npq")%>%
+  group_by(genotype, time_point, measurement, day)%>%
+  summarize(median = median(measured_value))
+
+
+ggplot(data = cell_370_example, aes(x = time_point, y = median))+
+  geom_line(aes(color = genotype), size = 1)+
+  facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+  #geom_ribbon(aes(ymin=CI_lower, ymax=CI_upper, fill = genotype), alpha=0.2)+
+  labs(x = "Hours", y = NULL)+
+  theme_tufte(base_family = "Calibri",
+              base_size = 18)+
+  theme(strip.background.x = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        axis.line=element_line(),
+        panel.spacing = unit(1, "lines"))+
+  scale_x_continuous(breaks = round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+
+
+
+data <- filter(cell_371_data, genotype =="mpk1", measurement == "npq")
+data$genotype <- reorder(data$genotype, data$number_2)
+plot <- ggplot(data = data, aes(x = time_point, y = genotype, fill = log2_fold)) + 
+  labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = paste(m, "Log 2 Fold Change"))+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  scale_x_continuous(breaks = round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 20)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
+print(plot)
+

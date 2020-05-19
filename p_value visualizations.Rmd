@@ -1,0 +1,97 @@
+---
+title: "P-Value Visualizations"
+author: "Abigail Seeger"
+date: "May 18, 2020"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(extrafont)
+library(lemon)
+p_value = read.csv("p_value.csv", header = TRUE)
+```
+
+```{r}
+genotype_combinations <- list(c("mpk1-17", "mpk1", "mpk17"), c("mpk1-16", "mpk1", "mpk16"), c("mpk6-9", "mpk6", "mpk9"),
+                              c("mpk17-20","mpk17", "mpk20"), c("mpk14-17", "mpk14", "mpk17"), c("mpk8-17", "mpk8","mpk17"),
+                              c("mpk8-20","mpk8","mpk20"), c("mpk6-18", "mpk6", "mpk18"), c("mpk1-13", "mpk1", "mpk13"), c("mpk17-20", "mpk17", "mpk20"), c("mpk13-20", "mpk13", "mpk20"), c("mpk6-8", "mpk6", "mpk8"), c("mpk9-18", "mpk9", "mpk18"),
+                              c("mpk6-20", "mpk6", "mpk20"), c("mpk14-16", "mpk14", "mpk16"), c("mpk18-20", "mpk18", "mpk20"), c("mpk5-6", "mpk5", "mpk6"), c("mpk14-18", "mpk14", "mpk18"), c("mpk5-6", "mpk5", "mpk6"), c("mpk14-18", "mpk14", "mpk18"), c("mpk5-17", "mpk5", "mpk17"),
+                              c("mpk1-3", "mpk1", "mpk3"), c("mpk1-17", "mpk1", "mpk17"), c("mpk3-16", "mpk3", "mpk16"), c("mpk9-16", "mpk9", "mpk16"), c("mpk14-20", "mpk14", "mpk20"))
+
+```
+
+```{r, fig.width=15, fig.height=10}
+for (element in genotype_combinations){
+  data <- filter(p_value, genotype %in% element)
+  plot <- ggplot(data = data, aes(x = time_point, y = p))+
+    geom_line(aes(color = genotype), size = 1)+
+    facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+    labs(x = "Hours", y = NULL)+
+    theme_tufte(base_family = "Calibri",
+                base_size = 18)+
+    theme(strip.background.x = element_blank(),
+          panel.border = element_rect(color = "black", fill = NA, size = 1),
+          axis.line=element_line(),
+          panel.spacing = unit(1, "lines"))+
+    scale_x_continuous(breaks = round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+    scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))+
+    geom_hline(yintercept=0.05, color = "red", size = 1.5)
+  print(plot)
+}
+```
+
+
+```{r, fig.width=15, fig.height=15}
+npq_p <- filter(p_value, measurement == "npq")
+leafarea_p <- filter(p_value, measurement == "leafarea")
+phi2_p <- filter(p_value, measurement == "phi2")
+################################################
+# P-Value: NPQ
+################################################
+ggplot(data = npq_p, aes(x = time_point, y = genotype, fill = p)) + 
+  labs(fill = "P-Value", x = "Hours", y = NULL, title = "P-Value for NPQ using a Wilcox Test")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  scale_x_continuous(breaks = round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 20)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        panel.spacing=unit(0, "lines"))+
+ # scale_fill_gradient2(low = "red", high="white", midpoint = 0.5)
+  scale_fill_gradient(trans = "log", low = "green", high = "black", breaks = c(0, 0.001, 0.05, 0.5))
+################################################
+# P-Value: Leaf Area
+################################################
+ggplot(data = leafarea_p, aes(x = time_point, y = genotype, fill = p)) + 
+  labs(fill = "P-Value", x = "Hours", y = NULL, title = "P-Value for Leaf Area using a Wilcox Test")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  scale_x_continuous(breaks = round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 20)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_gradient(trans = "log", low = "green", high = "black", breaks = c(0, 0.001, 0.05, 0.5))
+################################################
+# P-Value: Phi2
+################################################
+ggplot(data = phi2_p, aes(x = time_point, y = genotype, fill = p)) + 
+  labs(fill = "P-Value", x = "Hours", y = NULL, title = "P-Value for Phi2 using a Wilcox Test")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  scale_x_continuous(breaks = round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 20)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  # scale_fill_gradient2(low = "red", high="white", midpoint = 0.5)
+  scale_fill_gradient(trans = "log", low = "green", high = "black", breaks = c(0, 0.001, 0.05, 0.5))
+
+```
+

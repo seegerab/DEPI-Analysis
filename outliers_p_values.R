@@ -90,7 +90,7 @@ p_value%>%group_by(type)%>%summarize(p_lessthan_0.05 = sum(p<0.05), p_0.05_0.1 =
 try_again = data.frame()
 for (i in unique(feb_data$genotype)){
   try_this <- feb_data%>%
-  group_by(time_point, measurement)%>%
+    group_by(time_point, measurement)%>%
     mutate(n_genotype = length(measured_value[genotype == i]), n_wt = length(measured_value[genotype =="Col0"]))%>%
     mutate(p = (wilcox.test(measured_value[genotype == i], measured_value[genotype == "Col0"], exact = FALSE))$p.value)%>%
     mutate(genotype = i)%>%
@@ -138,7 +138,7 @@ ggplot(data = npq_p, aes(x = time_point, y = genotype, fill = p)) +
   theme(strip.background.y = element_blank(),
         strip.text.y = element_blank(),
         panel.spacing=unit(0, "lines"))+
- # scale_fill_gradient2(low = "red", high="white", midpoint = 0.5)
+  # scale_fill_gradient2(low = "red", high="white", midpoint = 0.5)
   scale_fill_gradient(trans = "log", low = "green", high = "black", breaks = c(0, 0.001, 0.05, 0.5))
 ################################################
 # P-Value: Leaf Area
@@ -241,4 +241,3 @@ ggplot(try_again)+
   geom_bar(aes(x=effect_size))
 
 hist(try_again$effect)
-

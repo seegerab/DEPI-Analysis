@@ -5,15 +5,16 @@
     "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "1284674248",
+    "hash" : "0",
     "id" : "888FF9B0",
-    "lastKnownWriteTime" : 1589466063,
-    "last_content_update" : 1589466063233,
+    "lastKnownWriteTime" : 1590076637,
+    "last_content_update" : 1590076637896,
     "path" : "~/Shiu Lab - R/Current/DEPI_outliers.R",
     "project_path" : "DEPI_outliers.R",
     "properties" : {
-        "cursorPosition" : "16,10",
-        "scrollLine" : "8"
+        "cursorPosition" : "16,0",
+        "docOutlineVisible" : "1",
+        "scrollLine" : "0"
     },
     "relative_order" : 1,
     "source_on_save" : false,

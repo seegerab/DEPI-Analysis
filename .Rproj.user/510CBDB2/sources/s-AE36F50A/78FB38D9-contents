@@ -1,0 +1,23 @@
+---
+title: "Test"
+author: "Abigail Seeger"
+date: "June 15, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+tEST 
+
+* bullet 1
+* bullet 2
+
+More text
+
+
+```{r}
+a <- 1+1
+```
+

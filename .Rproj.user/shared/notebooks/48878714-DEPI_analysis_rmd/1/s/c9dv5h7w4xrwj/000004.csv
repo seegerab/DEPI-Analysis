@@ -1,0 +1,3 @@
+"0","###Add ""month"" column to the DEPI subset - save as ""depi_month"""
+"0","depi_month <- rbind(add_day_col(add_number(feb_data)), dec_data)%>%"
+"0","  mutate(month = (ifelse(substr(plant_ID, 1,4) == ""0218"", ""Feb"", ""Dec"")))"

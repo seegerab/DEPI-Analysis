@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1592226251957.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "78FB38D9",
+    "lastKnownWriteTime" : 1592228789,
+    "last_content_update" : 1592228789267,
+    "path" : "~/Shiu Lab - R/Current/TEST.Rmd",
+    "project_path" : "TEST.Rmd",
+    "properties" : {
+        "cursorPosition" : "13,0",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

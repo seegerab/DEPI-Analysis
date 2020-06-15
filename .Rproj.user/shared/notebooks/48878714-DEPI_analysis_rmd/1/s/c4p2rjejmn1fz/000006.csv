@@ -1,0 +1,5 @@
+"0","ggplot(data = subset(dec_data_p_corrected, !is.na(effect_size)), aes(x = effect_size, na.rm = TRUE))+"
+"0","  geom_bar()+"
+"0","  labs(x = ""Effect size"", y = ""Count"", title = ""December: Effect size for significant p-values"")+"
+"0","  theme_minimal(base_family = ""Calibri"","
+"0","              base_size = 20)"

@@ -1,0 +1,2 @@
+"0","feb_data_p_corrected <- corrected_p_value(feb_data_p)"
+"0","feb_data_p_corrected$effect_size <- factor(feb_data_p_corrected$effect_size, levels = c(""small"", ""medium"", ""large""))"

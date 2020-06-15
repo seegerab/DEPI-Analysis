@@ -1,0 +1,3 @@
+"0","###Create two data sets based on collection period and remove border plants "
+"0","feb_data <- filter(depi_subset, substr(plant_ID, 1,4) == ""0218"", border == FALSE)"
+"0","dec_data <- filter(depi_subset, substr(plant_ID, 1,4) == ""1217"", border == FALSE)"

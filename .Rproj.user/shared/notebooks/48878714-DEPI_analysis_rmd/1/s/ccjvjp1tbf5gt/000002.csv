@@ -1,0 +1,4 @@
+"0","###The December collection period has ""growth"", while the February collection period has ""size"""
+"0","###Both of these measurements are recording leaf area, so change both to leafarea"
+"0","levels(depi_subset$measurement)[levels(depi_subset$measurement)==""size""] <- ""leafarea"""
+"0","levels(depi_subset$measurement)[levels(depi_subset$measurement)==""growth""] <- ""leafarea"""

@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1591898703125.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3179605A",
+    "lastKnownWriteTime" : 1591821083,
+    "last_content_update" : 1591821083,
+    "path" : "~/Shiu Lab - R/Current/DEPI_visualizations.R",
+    "project_path" : "DEPI_visualizations.R",
+    "properties" : {
+        "cursorPosition" : "567,0",
+        "docOutlineVisible" : "1",
+        "scrollLine" : "565"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,8 @@
+"0","###Here is the percentage of negative phi2 values:"
+"0","nrow(filter(dec_data, measurement == ""phi2"", measured_value <0))/nrow(dec_data)*100"
+"1","[1]"
+"1"," 0.0006345822"
+"1","
+"
+"0","###Here are the rows with NA for a measured value:"
+"0","dec_data[which(is.na(dec_data$measured_value)),]"

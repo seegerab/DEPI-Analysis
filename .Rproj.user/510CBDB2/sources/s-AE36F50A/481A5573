@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1591895303511.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2583286061",
+    "id" : "481A5573",
+    "lastKnownWriteTime" : 1592239068,
+    "last_content_update" : 1592239068614,
+    "path" : "~/Shiu Lab - R/Current/DEPI_analysis_rmd.Rmd",
+    "project_path" : "DEPI_analysis_rmd.Rmd",
+    "properties" : {
+        "cursorPosition" : "1247,17",
+        "docOutlineVisible" : "1",
+        "last_setup_crc32" : "AE36F50Abb338d19",
+        "scrollLine" : "1237",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

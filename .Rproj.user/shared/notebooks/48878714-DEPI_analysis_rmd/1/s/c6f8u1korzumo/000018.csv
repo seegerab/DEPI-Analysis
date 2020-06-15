@@ -1,0 +1,7 @@
+"0","  # theme(strip.background.y = element_blank(),"
+"0","  #       strip.text.y = element_blank(),"
+"0","  #       axis.title.x=element_blank(),"
+"0","  #       axis.text.x=element_blank(),"
+"0","  #       axis.ticks.x=element_blank(),"
+"0","  #       panel.spacing=unit(0, ""lines""))"
+"0","feb_data[(which(feb_data_p_corrected$effect==Inf)),]"

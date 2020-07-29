@@ -1,0 +1,254 @@
+---
+title: "Quantile Normalization"
+author: "Abigail Seeger"
+date: "July 28, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The objective of quantile normalization is to normalize the data to account for technical differences.
+
+Example: One lightbulb is better than another lightbulb used in a different micro-array experiment. So, every measurement might be brighter than every measurement from another experiment.
+
+In this case, the technical differences are a result of machinery associated with the DEPI chamber. **This has nothing to do with biology!**
+
+Here are the resources that I used to research quantile normalization:
+
+https://www.youtube.com/watch?v=ecjN6Xpv6SE
+
+How to implement quantile normalization in R:
+
+https://davetang.org/muse/2014/07/07/quantile-normalisation-in-r/
+
+**After looking into how this is done, I suspect I may run into a problem with experiments that have a different number of replicates per genotype!!**
+
+#Read in the Data
+
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = TRUE) 
+options(tinytex.verbose = TRUE)
+```
+
+Load necessary packages.
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+library(ggthemes)
+library(extrafont)
+library(sm)
+```
+
+
+```{r echo = FALSE}
+add_day_col <- function(df){
+  df$time_point <- as.numeric(df$time_point)
+  out <- df%>%
+  mutate(day = case_when(
+  (df$time_point < 24)~ "1",
+  (df$time_point >= 24 & df$time_point < 48)~ '2',
+  (df$time_point >= 48 & df$time_point < 72)~ '3',
+  (df$time_point >= 72 & df$time_point < 96)~ '4',
+  (df$time_point >= 96 & df$time_point < 120)~ '5',
+  (df$time_point >= 120 & df$time_point < 144)~ '6',
+  (df$time_point >= 144 & df$time_point < 168)~ '7',
+  (df$time_point >= 168 & df$time_point < 192)~ '8',
+  (df$time_point >= 192 & df$time_point < 216)~ '9',
+  (df$time_point >= 216 & df$time_point < 240)~ '10',
+  (df$time_point >= 240 & df$time_point < 264)~ '11',
+  (df$time_point >= 264 & df$time_point < 288)~ '12',
+  (df$time_point >= 288 & df$time_point < 312)~ '13',
+  (df$time_point >= 312 & df$time_point < 336)~ '14',
+  (df$time_point >= 336 & df$time_point < 360)~ '15',
+  (df$time_point >= 360 & df$time_point < 384)~ '16',
+  (df$time_point >= 384 & df$time_point < 408)~ '17',
+  (df$time_point >= 408 & df$time_point < 432)~ '18',
+  (df$time_point >= 432 & df$time_point < 456)~ '19',
+  (df$time_point >= 456 & df$time_point < 480)~ '20',
+  (df$time_point >= 480 & df$time_point < 504)~ '21',
+  (df$time_point >= 504 & df$time_point < 528)~ '22',
+  (df$time_point >= 528 & df$time_point < 552)~ '23',
+  (df$time_point >= 552 & df$time_point < 576)~ '24',
+  (df$time_point >= 576 & df$time_point < 600)~ '25'
+  ))
+  out$day <- as.integer(out$day)
+  return(out)}
+```
+
+
+# Create Data Frame
+
+```{r read_data}
+###Read in the data
+depi_jan <-read.table("DEPI_Jan_Seeger_Final.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+depi_dec_feb <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+###Add column names
+names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
+names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+
+```
+
+Create subsets of the Feb and Dec data. Even though I will eventually re-combine these subsets to create on data frame, this will make it easier to shift the NPQ values so the minimum is 0, and address NA and negative phi2 values for each experiment. 
+
+Next, select only the individual plant metadata, genotype, flat number, measurement, time point, measured value, and border columns, amd add a column with the month of the experiment. 
+
+
+```{r}
+###Select only the columns that we need and add a column with the month
+dec_data <- depi_dec_feb%>%
+    filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(substr(plant_ID, 1,4) == "1217")%>%
+  filter(border == FALSE)%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
+  mutate(month = "Dec")
+
+jan_data <- depi_jan%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(border == FALSE)%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
+  mutate(month = "Jan")
+
+feb_data <- depi_dec_feb%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(border == FALSE)%>%
+  filter(substr(plant_ID, 1,4) == "0218")%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
+  mutate(month = "Feb")
+```
+
+
+Remove the "X" in front of some time points.
+
+```{r}
+dec_data$time_point <- as.numeric(gsub("X","", dec_data$time_point))
+feb_data$time_point <- as.numeric(gsub("X","", feb_data$time_point))
+```
+
+Add a column with the day of the experiment.
+
+```{r}
+dec_data <- add_day_col(dec_data)
+jan_data <- add_day_col(jan_data)
+feb_data <- add_day_col(feb_data)
+```
+
+Here, address negative and NA measured values.
+
+```{r}
+###Shift all NPQ values so the minimum is 0
+dec_data$measured_value[dec_data$measurement == "npq"] <- (dec_data$measured_value[dec_data$measurement == "npq"])+abs(min((filter(dec_data, measurement == "npq"))$measured_value))
+
+jan_data$measured_value[jan_data$measurement == "npq"] <- (jan_data$measured_value[jan_data$measurement == "npq"])+abs(min((filter(jan_data, measurement == "npq"))$measured_value))
+
+feb_data$measured_value[feb_data$measurement == "npq"] <- (feb_data$measured_value[feb_data$measurement == "npq"])+abs(min((filter(feb_data, measurement == "npq"))$measured_value))
+
+###Remove the 2 NA values for phi2, and shift the phi2 measured values by the minimum values to ensure the minimum value is 0
+dec_data <- na.omit(dec_data)
+
+dec_data$measured_value[dec_data$measurement == "phi2"] <- (dec_data$measured_value[dec_data$measurement == "phi2"])+abs(min((filter(dec_data, measurement == "phi2"))$measured_value))
+
+```
+
+Finally, merge these three experiments to create one data frame.
+
+```{r}
+###Merge the two data frames, only using the columns they have in common
+depi_all <- rbind(dec_data, jan_data, feb_data)%>%
+  arrange(genotype, time_point, month)
+
+###Filter the time points by the max time point of the shortest experiment - can't make comparisons on days that the three experiments don't share
+depi_all <- as.data.frame(depi_all%>%
+    filter(time_point <= min(c(max(jan_data$time_point), max(dec_data$time_point), max(feb_data$time_point)))))
+
+```
+
+# Investigate Quantile Normalization
+
+First, I want to look at one time point for one specific genotype. I will focus on Col0 at time point 0 for NPQ. 
+
+I will be quantile normalizing the three experiments.
+
+```{r}
+dec_temp <- (depi_all%>%filter(genotype == "Col0", measurement == "npq", time_point == "0", month == "Dec")%>%arrange(measured_value))$measured_value
+jan_temp <- (depi_all%>%filter(genotype == "Col0", measurement == "npq", time_point == "0", month == "Jan")%>%arrange(measured_value))$measured_value
+feb_temp <- (depi_all%>%filter(genotype == "Col0", measurement == "npq", time_point == "0", month == "Feb")%>%arrange(measured_value))$measured_value
+```
+
+```{r}
+plot(density(dec_temp), xlim = c(.35, .75), main = "Time Point 0 - NPQ - Col0 - Density for all experiments")
+lines(density(jan_temp), col = "blue")
+lines(density(feb_temp), col = "red")
+legend(.35, 14, legend=c("December", "January", "February"),
+       col=c("black", "blue", "red"), lty=1)
+
+```
+
+The goal of quantile normalization is to get all three of these density plots to look the same.
+
+Clearly, I have some work to do - they have very different densities!
+
+**But, how do I approach this when there are an unequal number of replicates between experiments?**
+
+I couldn't find any obvious solutions online. Let's try this method with genotypes that have the same number of replicates in the three experiments.
+
+```{r}
+depi_all%>%
+  group_by(month, genotype, measurement)%>%
+  summarize(length(unique(individual_plant_metadata)))%>%
+  select(-measurement)%>%
+  distinct()%>%
+  arrange(genotype)
+
+```
+
+Okay - there are never genotypes that have the same amount of replicates per experiment, so that won't work.
+
+While I wait to discuss with Shinhan and Melissa how to handle this roadblock, investigate other ways to normalize data. 
+
+Another way to normalize data is to use feature scaling using min-max normalization.
+
+While this won't make the distributions have the same "shape", it ensure that the data has the same min and max values relative to each other.
+
+```{r}
+test_normalization <- depi_all%>%
+  filter(genotype == "Col0", measurement == "npq", time_point == "0")%>%
+  arrange(measured_value)%>%
+  group_by(month)%>%
+  mutate(min = min(measured_value), max = max(measured_value))%>%
+  mutate(scaled = (measured_value - min)/(max - min))%>%
+  select(month, scaled)
+
+filter(test_normalization, month == "Jan")$scaled
+
+```
+```{r}
+plot(density(filter(test_normalization, month == "Dec")$scaled), xlim = c(-1, 2), ylim = c(0,2), main = "Time Point 0 - NPQ - Col0 - Min-Max Normalization")
+lines(density(filter(test_normalization, month == "Jan")$scaled), col = "blue")
+lines(density(filter(test_normalization, month == "Feb")$scaled), col = "red")
+legend(.35, 14, legend=c("December", "January", "February"),
+       col=c("black", "blue", "red"), lty=1)
+
+```
+
+Here is a summary of each month:
+
+```{r}
+###December
+summary(filter(test_normalization, month == "Dec")$scaled)
+###January
+summary(filter(test_normalization, month == "Jan")$scaled)
+###February
+summary(filter(test_normalization, month == "Feb")$scaled)
+
+```
+
+So, we have the range that we want, but the quantiles are still variant between experiments. 

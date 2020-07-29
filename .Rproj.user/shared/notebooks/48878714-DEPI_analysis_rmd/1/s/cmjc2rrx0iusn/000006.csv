@@ -1,7 +1,0 @@
-"0","cell_371_leafarea_dec <- cell_371_dec%>%filter(measurement == ""leafarea"")%>%arrange(number)"
-"0","cell_371_npq_dec <- cell_371_dec%>%filter(measurement == ""npq"")%>%arrange(number)"
-"0","cell_371_phi2_dec <- cell_371_dec%>%filter(measurement == ""phi2"")%>%arrange(number)"
-"0","###Reorder each measurement data set by the number column so Col0 is on top, followed by single, followed by double mutants"
-"0","cell_371_leafarea_dec$genotype <- reorder(cell_371_leafarea_dec$genotype, cell_371_leafarea_dec$number)"
-"0","cell_371_npq_dec$genotype <- reorder(cell_371_npq_dec$genotype, cell_371_npq_dec$number)"
-"0","cell_371_phi2_dec$genotype <- reorder(cell_371_phi2_dec$genotype, cell_371_phi2_dec$number)"

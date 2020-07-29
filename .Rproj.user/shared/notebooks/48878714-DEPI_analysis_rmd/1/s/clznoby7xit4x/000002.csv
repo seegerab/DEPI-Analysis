@@ -1,1 +1,0 @@
-"0","feb_data$measured_value[feb_data$measurement == ""npq""] <- (feb_data$measured_value[feb_data$measurement == ""npq""])+abs(min((filter(feb_data, measurement == ""npq""))$measured_value))"

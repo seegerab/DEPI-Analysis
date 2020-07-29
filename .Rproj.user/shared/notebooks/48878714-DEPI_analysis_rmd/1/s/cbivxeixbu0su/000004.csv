@@ -1,4 +1,0 @@
-"0","###Because only two rows have negative phi2 values, remove these rows "
-"0","dec_data <- na.omit(dec_data)"
-"0","###Now, shift all phi2 values by the minimum measured_value"
-"0","dec_data$measured_value[dec_data$measurement == ""phi2""] <- (dec_data$measured_value[dec_data$measurement == ""phi2""])+abs(min((filter(dec_data, measurement == ""phi2""))$measured_value))"

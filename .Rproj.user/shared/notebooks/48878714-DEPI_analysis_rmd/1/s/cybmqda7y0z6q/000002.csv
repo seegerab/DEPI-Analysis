@@ -1,6 +1,0 @@
-"0","remove_outliers<- function(df){"
-"0","  out <- df%>%"
-"0","  group_by(genotype, measurement, time_point)%>%"
-"0","  mutate(measured_value = replace(measured_value, outliers_mad(measured_value, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%"
-"0","  arrange(genotype, measurement, time_point)"
-"0","  return(out)}"

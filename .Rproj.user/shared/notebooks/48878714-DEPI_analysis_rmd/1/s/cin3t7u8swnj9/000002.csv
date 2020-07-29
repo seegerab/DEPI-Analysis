@@ -1,5 +1,0 @@
-"0","###Summary statistics for the p values for each measurement;leaf area is never significant"
-"0","dec_data_p_corrected%>%group_by(measurement, type)%>%summarize(median = median(p), min = min(p), max = max(p))"
-"2","Error in dec_data_p_corrected %>% group_by(measurement, type) %>% summarize(median = median(p),  : 
-  could not find function ""%>%""
-"

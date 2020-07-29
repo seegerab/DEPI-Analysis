@@ -1,2 +1,0 @@
-"0","depi_data <-read.table(""DEPI_analysis_Seeger.txt"", sep = "","", header = FALSE)"
-"0","head(depi_data)"

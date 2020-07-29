@@ -1,0 +1,616 @@
+---
+title: "DEPI Analysis"
+author: "Abigail Seeger"
+date: "June 15, 2020"
+mainfont: Calibri
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    fig_height: 20
+    fig_width: 20
+    highlight: tango
+    number_sections: yes
+    theme: paper
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message=FALSE, 
+tidy.opts=list(width.cutoff=40),tidy=TRUE) 
+
+```
+
+```{r}
+library(knitr)
+library(formatR)
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, dev = "cairo_pdf", tidy.opts=list(width.cutoff=60),tidy=TRUE)
+
+```
+
+This analysis is of Arabadopsis plants grown in the DEPI chambers (Dynamic Enivronmental Photosynthetic Imager) at Michigan State University. The plants are a range of map kinase (MPK) mutants. The purpose of this experiment is to investigate the degree of redundancy in the MPK gene family.
+
+The data was collected in December 2017 and Februrary 2018. These different collection periods will be analyzed seperately.
+
+Here is the general analysis comparing the different collection periods. I will leave all functions, which were designed to be applied to each month seperately, in case they need to be applied to any general analysis comparing the different collection periods. 
+
+#All Data 
+##Load and clean data
+
+To begin, load necessary packages:
+
+```{r message = FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+###Lemon is used in ggplot2 - facet_rep_grid modification
+library(lemon)
+library(data.table)
+library(ggthemes)
+library(extrafont)
+###Routliers is used for outliersmad to find outliers
+library(Routliers)
+library(stringi)
+library(wesanderson)
+library(viridis)
+```
+
+```{r}
+loadfonts(quiet=TRUE)
+```
+
+
+Next, load in the data.
+
+```{r load_depi_data}
+depi_data <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+head(depi_data)
+```
+
+We need to first add column names.
+
+```{r add_col_names}
+names(depi_data) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+
+```
+
+Upon investigation, some time points have an "X" in front of them. Remove the "X" in front of these time points.
+
+```{r x_time_points}
+###Proportion of time points that have an "X":
+sum(str_detect(depi_data$time_point, "X"))/nrow(depi_data)
+###Rows that have an "X" in its time point:
+depi_X <- depi_data[which(str_detect(depi_data$time_point, "X")),]
+head(depi_X)
+
+unique(depi_X$time_point)
+unique(depi_X$genotype)
+unique(depi_X$measurement)
+nrow(unique(filter(depi_X, substr(plant_ID, 1,4)=="1217")))
+nrow(unique(filter(depi_X, substr(plant_ID, 1,4)=="0218")))
+
+###Remove these X values
+depi_data$time_point <- as.numeric(gsub("X","", depi_data$time_point))
+```
+
+It looks like the X time points area only in December. They are for a range of time points and genotypes. The X only appears in front of time points that are measuring growth and phi2, not npq. 
+
+There are some genotypes that are not MPK mutants in this data set. Create a subset of only MPK mutants and wildtype Col0 to use in subsequent analysis. Also, only use subline 1 of Col0, because prior investigations have shown that other sublines may behave differently. 
+
+```{r create_depi_subset}
+depi_subset <- depi_data%>%filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0" )|(genotype == "Col0"&subline == "1"))
+```
+
+Next, the December collection period has "growth" as a measurement, but the February collection period has "size". These are the same measurement - leaf area. Change both growth and size to leafarea. 
+
+```{r convert_growth_size_leafarea}
+###The December collection period has "growth", while the February collection period has "size"
+###Both of these measurements are recording leaf area, so change both to leafarea
+levels(depi_subset$measurement)[levels(depi_subset$measurement)=="size"] <- "leafarea"
+levels(depi_subset$measurement)[levels(depi_subset$measurement)=="growth"] <- "leafarea"
+```
+
+Create dec_data and feb_data from the depi_subset. This will allow us to analyze each collection period seperately. 
+
+```{r create_feb_dec_subsets}
+###Create two data sets based on collection period and remove border plants 
+feb_data <- filter(depi_subset, substr(plant_ID, 1,4) == "0218", border == FALSE)
+dec_data <- filter(depi_subset, substr(plant_ID, 1,4) == "1217", border == FALSE)
+```
+
+Finally, lets look at the genotype we have:
+
+```{r genotype_invest}
+unique(feb_data$genotype)
+unique(dec_data$genotype)
+```
+
+It looks like they have the same genotypes, except the February experiment has mpk5-17 while the December experiment does not. 
+
+##Create functions
+
+These functions will be applied to the December and February data seperately. 
+
+###add_day_col
+
+The add_day_col function adds a column with the day of the experiment to the data frame. This function first looks for breaks in the data - data was only collected when the lights were on, so a break of greater than five hours indicates a change of day. Then, a number is assigned to indicate the day of the experiment. 
+
+```{r add_day_col}
+add_day_col <- function(data_frame){
+  unique_time <- sort(unique(data_frame$time_point))
+  diff <- c()
+  for (i in 1:length(unique_time)){
+   if (i == 1){
+      diff[1] <- 0
+   }else{
+      diff[i] <- unique_time[i] - unique_time[i-1]}}
+  breaks <-c(0)
+  for (i in 1:length(diff)){
+    if (diff[i] > 5)
+      breaks <- append(breaks, unique_time[i])}
+  out <- data.frame()
+  for (i in 1:length(breaks)){
+    if (i == length(breaks)){
+      indiv <- data_frame%>%filter(time_point >= breaks[i])%>%mutate(day = i)
+   }else{
+    indiv <- data_frame%>%filter(time_point >=breaks[i] & time_point < breaks[i+1])%>%mutate(day = i)}
+    
+    out <- rbind(as.data.frame(indiv), out)}
+  return(out)}
+```
+
+###remove_outliers
+
+The remove_outliers function replaces measured values that are outliers with NA. Because we will analyze the data using nonparametric analysis, this function will not be applied to the data, because outliers have little influence on the median value. 
+
+First, group by genotype, measurement type, and time point. Once we've focused in on this, conduct the outliers_mad test using a conservative threshold value of 3.5. If the outliers_mad function finds an outlier, use the position of the outlier to replace the measured value with NA. 
+
+```{r remove_outliers}
+remove_outliers<- function(df){
+  out <- df%>%
+  group_by(genotype, measurement, time_point)%>%
+  mutate(measured_value = replace(measured_value, outliers_mad(measured_value, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
+  arrange(genotype, measurement, time_point)
+  return(out)}
+```
+
+###p_value
+
+The p_value function finds the p-value for the comparison of each genotype to wildtype in order to answer the question - does the phenotype (either leaf area, npq, or phi2) significantly differ from wild type? The test is repeated for each time point for each genotype.
+
+More information on the specifics used in the Wilcox test can be found [here](http://courses.atlas.illinois.edu/spring2016/STAT/STAT200/RProgramming/NonParametricStats.html) and [here](https://data.library.virginia.edu/the-wilcoxon-rank-sum-test/).
+
+The function is heavily commented, explaining each step in the pipeline. 
+
+```{r p_value}
+p_value <- function (data_frame){
+  ###Initialize an empty data frame
+  out = data.frame()
+  ###For each genotype:
+  for (i in unique(filter(data_frame, genotype != "Col0")$genotype)){
+    ###We don't want to make comparisons of WT to itself - this could impact FDR correction
+    indiv_data <- data_frame%>% 
+      ###Focus on each time point and measurement
+      group_by(time_point, measurement)%>%
+      ###Create a column with the number of WT individual plants and the number of plants for each genotype
+      ###Use this later to calculate effect size
+      mutate(n_genotype = length(measured_value[genotype == i]), n_wt = length(measured_value[genotype =="Col0"]))%>%
+      ###Create a column of p-values using a nonparametric Wilcox test
+      
+      ###Default set to exact = TRUE, because our sample sizes are too small to use a normal approximation
+      ###But, when there are ties in the values (i.e. one value appears twice in the ranking process), wilcox.test returns to the normal approximation and spits out a warning message
+      ###This may be a problem - include correct = FALSE to stop this from happening 
+      
+      ###More information:
+      ###http://courses.atlas.illinois.edu/spring2016/STAT/STAT200/RProgramming/NonParametricStats.html
+      ###https://data.library.virginia.edu/the-wilcoxon-rank-sum-test/
+      
+      ###Paired = FALSE, because the Col0 plants are independet from each genotype
+      ###Correct = FALSE turns off the continuity correction
+      mutate(p = (wilcox.test(measured_value[genotype == i], measured_value[genotype == "Col0"], correct = FALSE, paired = FALSE))$p.value)%>%
+  
+      ###Add a column with each genotype
+      mutate(genotype = i)%>%
+      # mutate(number = unique(filter(feb_data, genotype == i)$number))%>%
+      # mutate(number_2 = unique(filter(feb_data, genotype == i)$number_2))%>%
+      # 
+      select(time_point, genotype, measurement, day, p, n_wt, n_genotype)
+  
+      
+    ###Add individual information to the main data frame
+    out <- rbind(as.data.frame(indiv_data), out)}
+  return(out)}
+```
+
+###corrected_p_value
+
+The corrected_p_value function corrects the p-values using an FDR correction. First, the data is grouped by measurement and time point. Then, the p-value are corrected by the number of genotypes. [This function also computes effect size.](https://stats.stackexchange.com/questions/133077/effect-size-to-wilcoxon-signed-rank-test)
+
+Once again, the function is heavily commented, explaining each step of the pipeline.
+
+```{r corrected_p_value}
+corrected_p_value <- function(data_frame){
+  out <- data_frame%>%
+  ###For some reason, I have multiple copies of each row
+  distinct()%>%
+  ###Group by time point and measurement - we are correcting by the number of genotypes 
+  group_by(time_point, measurement)%>%
+  mutate(p_adj = p.adjust(p, method = "fdr"))%>%
+  ###Effect size calculated using method from:
+  ###https://stats.stackexchange.com/questions/133077/effect-size-to-wilcoxon-signed-rank-test
+  
+  ###Only report an effect size if the p-value is significant; otherwise, NA
+  mutate(effect = ifelse(p < 0.05, (abs(qnorm(p_adj))/sqrt(n_wt+n_genotype)), NA))%>%
+  mutate(effect_size = case_when(
+    ###Make sure these are the right cut offs for magnitude of effect size
+    (effect <0.1)~"small",
+    (effect>0.1 & effect < 0.5)~"medium",
+    (effect>0.5)~"large"))
+  ###Gather the data to make it easier to plot according to whether p was adjusted
+  out <- gather(out, type, p, p, p_adj)%>%arrange(genotype, time_point)
+  return(out) 
+}
+
+```
+
+###add_number
+
+The add_number function adds two columns - number and number_2. number is used to sort the heat maps that include all genotypes, while number_2 is used to sort the heat maps that are a trio of double and single mutants. 
+
+The code is not intuitive - it is commented throughout to explain each step. 
+
+```{r add_number}
+add_number <- function(data_frame){
+  ###First, if the genotype is Col0 (only genotype with length 4), assign 0 as number
+  ###Else, assign number as genotype with "mpk" removed
+  ###Example: mpk1 will be 1, mpk1-17 will be 1-17
+  data_frame <- data_frame%>%
+    mutate(number = ifelse(genotype != "Col0",(stri_sub(genotype, 4, length(genotype))), 0))
+  ###Next, for all double mutants, replace "-" with "0"
+  ###Example: 1-17 becomes 1017
+  data_frame$number <- as.numeric(gsub("-","0", data_frame$number))
+  ###Almost there! There's a problem with two single digit double mutants
+  ###We need a four digit number to sort correctly 
+  ###Example: mpk1-3 -> 1-3 -> 103, but we need it to be 1003 to sort correctly
+  data_frame$number[data_frame$number == "103"] <- "1003"
+  data_frame$number[data_frame$number == "506"] <- "5006"
+  data_frame$number[data_frame$number == "608"] <- "6008"
+  data_frame$number[data_frame$number == "609"] <- "6009"
+  ###Convert number to a numberic in order to sort
+  data_frame$number <- as.numeric(data_frame$number)
+  data_frame <- data_frame%>%arrange(number)
+  data_frame <- data_frame%>%mutate(number_2 = number)
+  data_frame$number_2[nchar(data_frame$number_2) == 4] <- 0
+  data_frame$number_2[nchar(data_frame$number_2) == 5] <- 0
+  return(data_frame)
+}
+```
+
+###cell_370_data
+
+The cell_370_data function prepares the data to use in visualizations mirrored after page 370 of the Cell paper Dynamic Environmental Photosynthetic Imaging Reveals Emergent Phenotypes.
+
+This function groups the data by genotype, and for each time point and each measurement finds the median measured value of the plants. Because of how variable the leaf area measurements are between time points, only the beginning and end of each day will be plotted. 
+
+
+```{r cell_370_data_function}
+cell_370_data <- function(data_frame){
+  npq_phi2 <- data_frame%>%
+     filter(measurement %in% c("npq","phi2"))%>%
+     group_by(genotype, time_point, measurement)%>%
+     summarize(med = median(measured_value))
+  ###For each day, we want the minimum and maximum time point for leaf area
+  
+  ###Previously included the midpoint - leave code in case we want to use in the future, just commented out
+  
+  ###If there are an odd number of time points, use the median time point
+  ###If there are an even number of time points, instead of finding the average of the two center values, choose the larger value
+  #start_mid_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point), ifelse(length(time_point %% 2 == 0), median(time_point[-1]), median(time_point)))))$time_point)
+  
+  start_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point))))$time_point)
+  
+  leaf_area <- data_frame%>%
+    filter(measurement == "leafarea")%>%
+    filter(time_point %in% start_end)%>%
+    group_by(genotype, time_point, measurement)%>%
+    summarize(med = median(measured_value))
+  
+  out <- rbind(npq_phi2, leaf_area)%>%group_by(genotype, time_point, measurement)
+  
+  return(as.data.frame(out))}
+```
+
+###cell_371_data
+
+The cell_371_data_function prepares the data to use to create visualizations mirrored after page 371 in the Cell paper Dynamic Environmental Photosynthetic Imaging Reveals Emergent Phenotypes.
+
+This function:
+
+* groups the data by time point and measurement and genotype
+* divides the measured value of each genotype by the median wild type value
+* calculates the log 2 value for the median of these values
+
+Similar to above, we are only interested in the start and end time points for the leaf area measurement. 
+
+```{r cell_371_data_function}
+cell_371_data <- function (data_frame) {
+  
+  npq_phi2 <- data_frame%>%
+    filter(measurement %in% c("npq","phi2"))%>%
+    group_by(time_point, measurement)%>%
+    mutate_each(funs(./median(.[genotype == "Col0"])), measured_value)%>%
+    group_by(time_point, measurement, genotype)%>%
+    mutate(log2_fold = log2(median(measured_value)))
+  
+  #start_mid_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point), ifelse(length(time_point %% 2 == 0), median(time_point[-1]), median(time_point)))))$time_point)
+  start_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point))))$time_point)
+  
+  leaf_area <- data_frame%>%
+    filter(measurement == "leafarea")%>%
+    filter(time_point %in% start_end)%>%
+    group_by(time_point, measurement)%>%
+    mutate_each(funs(./median(.[genotype == "Col0"])), measured_value)%>%
+    group_by(time_point, measurement, genotype)%>%
+    mutate(log2_fold = log2(median(measured_value)))
+  
+  out <- rbind(npq_phi2, leaf_area)%>%group_by(genotype, time_point, measurement)
+  
+  return(as.data.frame(out))
+}
+
+```
+
+###Genotype combinations
+
+Finally, define a list of all combinations of single and double mutants. We will use this multiple times in the following analysis to loop through each combination to create plots.
+
+```{r}
+genotype_combinations <- list(c("mpk1-17", "mpk1", "mpk17"), c("mpk1-16", "mpk1", "mpk16"), c("mpk6-9", "mpk6", "mpk9"),
+                              c("mpk17-20","mpk17", "mpk20"), c("mpk14-17", "mpk14", "mpk17"), c("mpk8-17", "mpk8","mpk17"),
+                              c("mpk8-20","mpk8","mpk20"), c("mpk6-18", "mpk6", "mpk18"), c("mpk1-13", "mpk1", "mpk13"), c("mpk17-20", "mpk17", "mpk20"), c("mpk13-20", "mpk13", "mpk20"), c("mpk6-8", "mpk6", "mpk8"), c("mpk9-18", "mpk9", "mpk18"),
+                              c("mpk6-20", "mpk6", "mpk20"), c("mpk14-16", "mpk14", "mpk16"), c("mpk18-20", "mpk18", "mpk20"), c("mpk5-6", "mpk5", "mpk6"), c("mpk14-18", "mpk14", "mpk18"), c("mpk5-6", "mpk5", "mpk6"), c("mpk14-18", "mpk14", "mpk18"), c("mpk5-17", "mpk5", "mpk17"),
+                              c("mpk1-3", "mpk1", "mpk3"), c("mpk1-17", "mpk1", "mpk17"), c("mpk3-16", "mpk3", "mpk16"), c("mpk9-16", "mpk9", "mpk16"), c("mpk14-20", "mpk14", "mpk20"))
+```
+
+
+# General Analysis
+## Violin Plots
+
+Now, we want to compare the distributions between the December and February collection periods.
+
+To do this, we'll compare each genotype to wild type for all measurements. We will focus only on the first 7 days, because the length of the experiments differ and the shortest collection period was 7 days. 
+
+To compare the experiments, we'll first add a column with the month of the experiment.
+
+```{r add_month_col}
+feb_data <- add_day_col(feb_data)
+dec_data <- add_day_col(dec_data)
+###Add "month" column to the DEPI subset - save as "depi_month"
+depi_month <- rbind(feb_data, dec_data)%>%
+  mutate(month = (ifelse(substr(plant_ID, 1,4) == "0218", "Feb", "Dec")))
+```
+
+Next, create all of the violin plots. 
+
+(In the R markdown, I have this set to eval = FALSE. This code will not be run, and we won't see any output. I didn't delete the code in case we want to access these plots later, but it takes too long to knit including all of these plots.)
+
+```{r eval = FALSE}
+for (g in unique(filter(depi_month, genotype != "Col0")$genotype)){
+  for (d in c(1:7)){
+    data <- filter(depi_month, genotype %in% c("Col0", g), day == d)
+    plot <- ggplot(data = data, aes(x = genotype, y = measured_value, color = genotype))+
+      geom_violin(adjust = 1)+
+      geom_boxplot(width=0.1, alpha=0.2) +
+      scale_color_viridis(discrete = TRUE, option = "B")+
+      facet_grid(measurement~month+genotype, scales = "free", switch = "y")+
+      labs(title = "Day 3: Mpk1 and Col0")+
+      labs(title = paste("Day ", d, ": ", g," and Col0", sep=""))+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 20)+
+      theme(axis.title.y=element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color="black", fill=NA),
+          plot.title = element_text(hjust = 0.5))
+    print(plot)
+    #ggsave(plot, filename=paste("violin_plot_",g,"_", d ,".png",sep=""), scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations/Violin Plots")
+  }} 
+
+```
+
+
+Instead of creating violin plots for each day, instead focus in on where we see significant differences between the different genotypes and Col0.
+
+```{r message = FALSE, warning = FALSE}
+feb_data_p_corrected <- corrected_p_value(p_value(feb_data))
+dec_data_p_corrected <- corrected_p_value(p_value(dec_data))
+
+
+
+feb_significant <- (feb_data_p_corrected%>%filter(type == "p_adj")%>%filter(p < 0.05)%>%select(time_point, genotype, measurement, day, p))$time_point
+
+dec_significant <- (dec_data_p_corrected%>%filter(type == "p_adj")%>%filter(p < 0.05)%>%select(time_point, genotype, measurement, day, p))$time_point
+
+###Some of the measurements are not recorded exactly on the hour, so we see some very small decimals. In order to compare time points between experiments, round to the nearest hour
+intersect <- intersect(round(feb_significant, 0), round(dec_significant, 0))
+```
+
+These time points are good places to start - both February and December have significant p-values for at least one gentype at these points for the same measurements.
+
+But what genotypes are significant and at what exact time points and for what measurements?
+
+```{r get_exact_time_genotype}
+temp_feb <- feb_data_p_corrected%>%filter(type == "p_adj")%>%mutate(time_round = round(time_point, 0))%>%filter(time_point %in% intersect)%>%filter(p<0.05)%>%arrange(time_point)
+
+temp_dec <- dec_data_p_corrected%>%filter(type == "p_adj")%>%mutate(time_round = round(time_point, 0))%>%filter(time_point %in% intersect)%>%filter(p<0.05)%>%arrange(time_point)
+
+temp_select <- inner_join(temp_feb, temp_dec, by = c("time_point" = "time_point", "genotype" = "genotype", "measurement" = "measurement"))%>%select(time_point, genotype, measurement)
+```
+
+Now that we know what time points, genotypes, and measurements to target, create a subset of the data to plot.  
+
+```{r violin_subset}
+temp_df <- inner_join(depi_month, temp_select, by = c("time_point" = "time_point", "genotype" = "genotype", "measurement" = "measurement"))%>%select(time_point, genotype, measured_value, measurement,  month)%>%arrange(time_point, genotype)
+
+temp_wt <- depi_month%>%filter(genotype == "Col0", time_point %in% unique(temp_df$time_point), measurement %in% unique(temp_df$measurement))%>%select(time_point, genotype, measured_value, measurement, month)
+
+violin_subset <- rbind(temp_df, temp_wt)
+head(violin_subset)
+```
+
+Now we're ready to plot! 
+
+```{r select_violin_plots}
+for (g in unique(filter(violin_subset, genotype != "Col0")$genotype)){
+  for (t in unique(violin_subset$time_point)){
+    data <- filter(violin_subset, genotype %in% c("Col0", g), time_point == t)
+    plot <- ggplot(data = data, aes(x = genotype, y = measured_value, color = genotype))+
+      geom_violin(adjust = 1)+
+      geom_boxplot(width=0.1, alpha=0.2) +
+      facet_grid(measurement~month+genotype, scales = "free", switch = "y")+
+      labs(title = paste("Time Point ", t, ": ", g," and Col0", sep=""))+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 20)+
+      theme(axis.title.y=element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color="black", fill=NA),
+          plot.title = element_text(hjust = 0.5))
+    print(plot)
+    title <- paste("violin_plot_",g,"_",t,".png", sep = "")
+    # ggsave(plot, filename=title, scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations/VP")
+  }} 
+
+```
+
+These next chunks of code are to create violin plots for all significant p-values in the February data set. This takes too much time to run. 
+
+```{r eval = FALSE}
+temp_feb_p <- filter(feb_data_p_corrected, type == "p_adj", p < 0.05)%>%select(time_point, genotype, measurement, p)
+
+temp_df <- inner_join(depi_month, temp_feb_p, by = c("time_point" = "time_point", "genotype" = "genotype", "measurement" = "measurement"))%>%select(time_point, genotype, measured_value, measurement,  month)%>%arrange(time_point, genotype)
+
+temp_wt <- depi_month%>%filter(genotype == "Col0", time_point %in% unique(temp_df$time_point), measurement %in% unique(temp_df$measurement))%>%select(time_point, genotype, measured_value, measurement, month)
+
+feb_violin <- rbind(temp_df, temp_wt)
+```
+
+
+```{r eval = FALSE}
+for (g in unique(filter(feb_violin, genotype != "Col0")$genotype)){
+  for (t in unique(feb_violin$time_point)){
+    data <- filter(feb_violin, genotype %in% c("Col0", g), time_point == t)
+    plot <- ggplot(data = data, aes(x = genotype, y = measured_value, color = genotype))+
+      geom_violin(adjust = 1)+
+      geom_boxplot(width=0.1, alpha=0.2) +
+      facet_grid(month, scales = "free", switch = "y")+
+      labs(title = paste("Time Point ", t, ": ", g," and Col0", sep=""))+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 20)+
+      theme(axis.title.y=element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color="black", fill=NA),
+          plot.title = element_text(hjust = 0.5))
+    print(plot)
+    #ggsave(plot, filename=paste("violin_plot_",g,"_", t ,".png",sep=""), scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations/Violin Plots")
+  }} 
+
+```
+
+## Number of Replicates
+
+To get an idea of how many replicates we have for each genotype, we will plot histograms for both December and February.
+
+First, create a function that can be applied to both December and February. The plants_per_genotype function returns the number of unique plants per genotype. This is the number of replicates per genotype. 
+
+```{r plants_per_genotype_function}
+plants_per_genotype <- function(data_frame){
+  data_frame%>%
+  ###Choose time point = 0, because all experiments start at time point 0
+  filter(time_point == "0")%>%
+  ###We want the number of unique plants per genotype
+  group_by(genotype)%>%
+  ###This will over count the same plant, because each genotype will have npq, phi2, and leaf area measurements. To account for this, divide by 3.
+  summarize(count = n()/3)%>%
+  arrange(count)}
+```
+
+Next, use the function we just created to visualize the number of replicates that each genotype has for December and February.
+
+```{r histogram_of_replicates}
+dec_plants <- plants_per_genotype(dec_data)
+feb_plants <- plants_per_genotype(feb_data)
+hist(feb_plants$count, main = "February - Number of plants per genotype", xlab = "Count", breaks = 10)
+hist(dec_plants$count, main = "December - Number of plants per genotype", xlab = "Count", breaks = 5, xlim = c(0, 30))
+```
+
+After looking at each histogram, it appears that some genotypes in December have very few replicates. Here is a breakdown of the number of plants per genotype:
+
+```{r summary_dec_feb_rep}
+summary(dec_plants$count)
+summary(feb_plants$count)
+```
+
+## Compare Cell 370 Plots
+
+The NPQ facet for February flucuates so the plot appears to be filled, when actually the line is just moving up and down rapidly.
+
+But, the NPQ facet for December does not have this same fill effect. Instead, it essentially looks like a smooth line.
+
+This is especially strange, because the phi2 measurement has fill effects for both December and February. 
+
+Why do we see this?
+
+```{r}
+investigate_feb <- add_day_col(feb_data)%>%
+  filter(genotype == "Col0", measurement == "npq", day == "3")%>%
+  group_by(time_point)%>%
+  summarize(median_npq = median(measured_value))
+investigate_dec <- add_day_col(dec_data)%>%
+  filter(genotype == "Col0", measurement == "npq", day == "3")%>%
+  group_by(time_point)%>%
+  summarize(median_npq = median(measured_value))
+###Just phi2 measurements
+investigate_dec_phi2 <- add_day_col(dec_data)%>%
+  filter(genotype == "Col0", measurement == "phi2", day == "3")%>%
+  group_by(time_point)%>%
+  summarize(median_phi2 = median(measured_value))
+
+investigate_dec
+investigate_feb
+#investigate_dec_phi2
+
+nrow(investigate_feb)
+nrow(investigate_dec)
+```
+
+December data was recorded every hour, but February data was recorded 4 times an hour.
+
+```{r}
+dec_measurement_summary <- add_day_col(dec_data)%>%
+  filter(measurement !="leafarea")%>%
+  group_by(measurement, day)%>%
+  summarize(measurements = length(unique(time_point)))
+
+feb_measurement_summary <- add_day_col(feb_data)%>%
+  filter(measurement !="leafarea")%>%
+  group_by(measurement, day)%>%
+  summarize(measurements = length(unique(time_point)))
+
+dec_measurement_summary
+feb_measurement_summary
+```
+
+So, on day 3 February has 64 times where observations were made, but December only has 16. 

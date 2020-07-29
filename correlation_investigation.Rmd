@@ -1,0 +1,1608 @@
+---
+title: "Correlation Between Experiments"
+author: "Abigail Seeger"
+date: "July 23, 2020"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    highlight: tango
+    number_sections: yes
+    theme: paper
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 4
+    toc_float: yes
+
+---
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = TRUE) 
+options(tinytex.verbose = TRUE)
+```
+
+Load necessary packages.
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+library(ggthemes)
+library(extrafont)
+```
+
+
+```{r echo = FALSE}
+add_day_col <- function(df){
+  df$time_point <- as.numeric(df$time_point)
+  out <- df%>%
+  mutate(day = case_when(
+  (df$time_point < 24)~ "1",
+  (df$time_point >= 24 & df$time_point < 48)~ '2',
+  (df$time_point >= 48 & df$time_point < 72)~ '3',
+  (df$time_point >= 72 & df$time_point < 96)~ '4',
+  (df$time_point >= 96 & df$time_point < 120)~ '5',
+  (df$time_point >= 120 & df$time_point < 144)~ '6',
+  (df$time_point >= 144 & df$time_point < 168)~ '7',
+  (df$time_point >= 168 & df$time_point < 192)~ '8',
+  (df$time_point >= 192 & df$time_point < 216)~ '9',
+  (df$time_point >= 216 & df$time_point < 240)~ '10',
+  (df$time_point >= 240 & df$time_point < 264)~ '11',
+  (df$time_point >= 264 & df$time_point < 288)~ '12',
+  (df$time_point >= 288 & df$time_point < 312)~ '13',
+  (df$time_point >= 312 & df$time_point < 336)~ '14',
+  (df$time_point >= 336 & df$time_point < 360)~ '15',
+  (df$time_point >= 360 & df$time_point < 384)~ '16',
+  (df$time_point >= 384 & df$time_point < 408)~ '17',
+  (df$time_point >= 408 & df$time_point < 432)~ '18',
+  (df$time_point >= 432 & df$time_point < 456)~ '19',
+  (df$time_point >= 456 & df$time_point < 480)~ '20',
+  (df$time_point >= 480 & df$time_point < 504)~ '21',
+  (df$time_point >= 504 & df$time_point < 528)~ '22',
+  (df$time_point >= 528 & df$time_point < 552)~ '23',
+  (df$time_point >= 552 & df$time_point < 576)~ '24',
+  (df$time_point >= 576 & df$time_point < 600)~ '25'
+  ))
+  out$day <- as.integer(out$day)
+  return(out)}
+```
+
+Here, I will investigate the correlation between experiments.
+
+This is the general approach I will take:
+
+1. Create one data frame with all experiments.
+2. Add a column with the day of the experiment and the month of the experiment.
+3. Look at the correlation between each measured value for each day and genotype for each experiment. I will have three correlation values: Dec to Jan, Jan to Feb, and Feb to Dec. I will be comparing the median measured values at each time point.
+4. Finally, I will create a table that has the r-squared values for each day of the experiment, for each genotype, and for each measurement.
+
+
+![A schematic of how Shinhan proposed I tackle this.](/Users/Joan Seeger/Documents/Research/Shiu Lab/Shiu Lab - R/correlation_schematic.png)
+
+
+# Create Data Frame
+
+```{r read_data}
+###Read in the data
+depi_jan <-read.table("DEPI_Jan_Seeger_Final.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+depi_dec_feb <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+###Add column names
+names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
+names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+
+```
+
+Create subsets of the Feb and Dec data. Even though I will eventually re-combine these subsets to create on data frame, this will make it easier to shift the NPQ values so the minimum is 0, and address NA and negative phi2 values for each experiment. 
+
+Next, select only the individual plant metadata, genotype, flat number, measurement, time point, measured value, and border columns, amd add a column with the month of the experiment. 
+
+
+```{r}
+###Select only the columns that we need and add a column with the month
+dec_data <- depi_dec_feb%>%
+    filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(substr(plant_ID, 1,4) == "1217")%>%
+  filter(border == FALSE)%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
+  mutate(month = "Dec")
+
+jan_data <- depi_jan%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(border == FALSE)%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
+  mutate(month = "Jan")
+
+feb_data <- depi_dec_feb%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(border == FALSE)%>%
+  filter(substr(plant_ID, 1,4) == "0218")%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
+  mutate(month = "Feb")
+```
+
+
+Remove the "X" in front of some time points.
+
+```{r}
+dec_data$time_point <- as.numeric(gsub("X","", dec_data$time_point))
+feb_data$time_point <- as.numeric(gsub("X","", feb_data$time_point))
+```
+
+Add a column with the day of the experiment.
+
+```{r}
+dec_data <- add_day_col(dec_data)
+jan_data <- add_day_col(jan_data)
+feb_data <- add_day_col(feb_data)
+```
+
+Here, address negative and NA measured values.
+
+```{r}
+###Shift all NPQ values so the minimum is 0
+dec_data$measured_value[dec_data$measurement == "npq"] <- (dec_data$measured_value[dec_data$measurement == "npq"])+abs(min((filter(dec_data, measurement == "npq"))$measured_value))
+
+jan_data$measured_value[jan_data$measurement == "npq"] <- (jan_data$measured_value[jan_data$measurement == "npq"])+abs(min((filter(jan_data, measurement == "npq"))$measured_value))
+
+feb_data$measured_value[feb_data$measurement == "npq"] <- (feb_data$measured_value[feb_data$measurement == "npq"])+abs(min((filter(feb_data, measurement == "npq"))$measured_value))
+
+###Remove the 2 NA values for phi2, and shift the phi2 measured values by the minimum values to ensure the minimum value is 0
+dec_data <- na.omit(dec_data)
+
+dec_data$measured_value[dec_data$measurement == "phi2"] <- (dec_data$measured_value[dec_data$measurement == "phi2"])+abs(min((filter(dec_data, measurement == "phi2"))$measured_value))
+
+```
+
+Finally, merge these three experiments to create one data frame.
+
+```{r}
+###Merge the two data frames, only using the columns they have in common
+depi_all <- rbind(dec_data, jan_data, feb_data)%>%
+  arrange(genotype, time_point, month)
+
+###Filter the time points by the max time point of the shortest experiment - can't make comparisons on days that the three experiments don't share
+depi_all <- as.data.frame(depi_all%>%
+    filter(time_point <= min(c(max(jan_data$time_point), max(dec_data$time_point), max(feb_data$time_point)))))
+
+```
+
+Ensure that all experiments have the same maximum time point and that we removed the time points at the end of each experiment that are not shared:
+
+```{r}
+depi_all%>%
+  group_by(month)%>%
+  summarize(max(time_point))
+```
+
+Ensure that the measurements are labeled consistently between experiments:
+
+```{r}
+depi_all$measurement[depi_all$measurement == "size"] <- "leafarea"
+depi_all$measurement[depi_all$measurement == "growth"] <- "leafarea"
+```
+
+Have a look at the data:
+
+```{r}
+head(depi_all)
+```
+
+# Create Plot Template
+
+Before accessing the entire data frame, use a subset of the data to create plots.
+
+We will later use this same code to create all plots.
+
+Note - I am comparing the median values for each time point to each other for the December and January experiments. I am not using the measured values for each individual plant, because there are not a equal number of replicates between experiments. And, the order of the measured values with the individual plants is arbitrary, so they would not be meaningful comparisons. 
+
+```{r}
+a <- filter(dec_data, genotype == "mpk1", measurement == "npq", day == "1")%>%
+  group_by(time_point)%>%
+  mutate(median = median(measured_value))
+
+b <- filter(jan_data, genotype == "mpk1", measurement == "npq", day == "1")%>%
+  group_by(time_point)%>%
+  mutate(median = median(measured_value))
+
+reg <- lm(b$median~a$median)
+summary(reg)
+
+plot(a$median,b$median,
+abline(reg, col = "red"),
+main = "Day 1 - Mpk1 - NPQ - \nComparing December and January",
+xlab = "December Median Measured Value",
+ylab = "January Median Measured Value"
+)
+abline(0,1, col = "blue", lty = 5)
+legend(.35, .47, legend=c("Line of best fit", "y = x"),
+       col=c("red", "blue"), lty=1:2, cex=0.8)
+
+
+```
+
+This is good - but I can make this look better in ggplot.
+
+```{r}
+a<-filter(dec_data, genotype == "mpk1", measurement == "npq", day == "1")%>%
+  group_by(time_point)%>%
+  mutate(median = median(measured_value))
+
+b <- filter(jan_data, genotype == "mpk1", measurement == "npq", day == "1")%>%
+  group_by(time_point)%>%
+  mutate(median = median(measured_value))
+
+test <- data.frame(a$median, b$median, a$time_point, b$time_point)
+
+test <- test%>%distinct()
+
+ggplot(data = test, aes(x = a.median, y = b.median))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE, aes(color = "black"), formula = y~x)+
+  geom_abline(aes(slope = 1, intercept = 0, color = "red"), show.legend = FALSE)+
+  labs(title = "Day 1 - Mpk1 - NPQ - Comparing December and January", x = "December Median Measured Value", y = "January Median Measured Value",
+       subtitle = paste(paste("Adjusted R-Squared = ", round(summary(lm(test$b.median~test$a.median))$adj.r.squared, 3), sep = ""
+, ","),  paste("y = ", round(coef(summary(lm(test$b.median~test$a.median)))[2,1], 3),"x + ",round(coef(summary(lm(test$b.median~test$a.median)))[1,1],3), sep = "")), sep = "")+
+  scale_colour_manual(name=c('Lines', "Adjusted R-Squared Value"),
+                      labels = c("Line of Best Fit", "y = x "),  
+                      values=c("red", "blue"))+
+  theme_foundation(base_family = "Calibri", base_size = 15)
+
+coef(summary(lm(test$b.median~test$a.median)))[2,1]
+
+coef(summary(lm(test$b.median~test$a.median)))[1,1]
+
+
+ paste("y = ", round(coef(summary(lm(test$b.median~test$a.median)))[2,1], 3),"x + ",round(coef(summary(lm(test$b.median~test$a.median)))[1,1],3), sep = "")
+  
+```
+
+Okay, this is what I want all of my plots to look like!
+
+# Correlation - Possible Problems
+
+What problems is it likely that I will run into?
+
+```{r}
+depi_all%>%
+  group_by(month, genotype, day)%>%
+  summarize(measurements_per_plant = length(measured_value)/length(unique(individual_plant_metadata)))%>%
+  dcast(genotype + day ~ month, value.var = "measurements_per_plant")%>%
+  ###Exclude days later than day 8, because the Deceber experiment is only 7 days long
+  filter(day < 8)%>%
+  select(genotype, day, Dec, Jan, Feb)
+
+depi_all%>%
+  filter(time_point == "0")%>%
+  group_by(genotype, month)%>%
+  summarize(replicates = length(unique(individual_plant_metadata)))%>%
+  dcast(genotype ~ month, value.var = "replicates")
+
+```
+
+
+It looks we have the same number of measured values per day. But, we have a different number of replicates per genotype for each experiment. 
+
+And, I will eventually have to remove the mpk5-17 genotype - it is not present in every experiment. 
+
+I anticipate I will have a problem with the time points; for example, 60.5003 would be considered different from 60.5000.
+
+So, I am going to round each time point to the hundredths place, just in case this occurs somewhere in the data.
+
+```{r}
+depi_all$time_point <- round(depi_all$time_point, 2)
+```
+
+```{r}
+unique(filter(depi_all, day == "1", month == "Jan")$time_point)
+unique(filter(depi_all, day == "1", month == "Dec")$time_point)
+unique(filter(depi_all, day == "1", month == "Feb")$time_point)
+
+unique(filter(depi_all, day == "3", month == "Jan")$time_point)
+unique(filter(depi_all, day == "3", month == "Dec")$time_point)
+unique(filter(depi_all, day == "3", month == "Feb")$time_point)
+```
+
+It looks like I solved the obvious problems that I saw. This may still be a problem I encounter later though!
+
+And, it looks like December and February have more measured values than the January experiment for day 3. I will have to figure out how to select time points that are only present in both experiments that I am comparing. 
+
+Now, how do I approach comparison when I have a different number of replicates?
+
+I'll find the median measured value for each time point, and make sure that I have the same time points between the experiments that I'm comparing.
+
+# Correlation
+
+The analysis will be divided into three steps.
+
+* FIRST - Remove the mpk5-17 genotype. Find the median measured value for each experiment/genotype/measurement/time point.
+* SECOND - Make sure that the number of time points is the same between each day for the two experiments being compared. 
+* Then, find out what time points they have in common. All in common? Great! Some time points in one experiment but not the other? Remove them!
+* FINAL - Find the adjusted r-squared value for each combination of measured value and time point.
+
+## December and February
+
+```{r}
+FIRST_DEC_FEB <- depi_all%>%
+  ###Remove the mpk5-17 genotype
+   filter(genotype != "mpk5-17")%>%
+  filter(month %in% c("Dec","Feb"))%>%
+   group_by(month, day, measurement, time_point, genotype)%>%
+  ###Find the median measured value for each experiment/day/measurement/time_point/genotype combination
+   mutate(med = median(measured_value))%>%
+  ###Select only the columns listed
+   select(month, day, measurement, time_point, genotype, med)%>%
+  ###Remove duplicate rows
+   distinct()
+
+head(FIRST_DEC_FEB)
+```
+```{r}
+SECOND_DEC_FEB <- FIRST_DEC_FEB%>%
+   group_by(day, month)%>%
+  ###Find the number of time points for each day of each experiment
+   mutate(n = length(unique(time_point)))%>%
+   ungroup()%>%
+   group_by(day)%>%
+  ###Compare the number of time points between days of each experiment
+  ###Create a new column with the minimum of the length of time points
+   mutate(min = min(n))%>%
+   group_by(day, month, genotype)
+head(SECOND_DEC_FEB)
+
+filter(SECOND_DEC_FEB, n != min)%>%
+  select(month, day, n, min)%>%
+  distinct()
+```
+
+Okay, so now I need to make sure I select only the time points that they have in common.
+
+What are these time points?
+
+```{r}
+for (d in 1:7){
+  print(unique(filter(depi_all, month == "Dec", day == d)$time_point))
+  print(unique(filter(depi_all, month == "Feb", day == d)$time_point))
+}
+
+###These are the values that AREN'T in the intersection
+###This is an empty vector, so all time points overlap!
+setdiff(unique(filter(SECOND_DEC_FEB, month =="Dec")$time_point), unique(filter(SECOND_DEC_FEB, month =="Feb")$time_point))
+```
+
+Here, ensure that the time points are in the intersection of the two experiments:
+
+```{r}
+SECOND_DEC_FEB <- SECOND_DEC_FEB%>%filter(time_point %in% c(intersect(unique(filter(depi_all, month == "Dec")$time_point), unique(filter(depi_all, month == "Feb")$time_point))))
+```
+
+Verify this gives us what we want: 
+
+```{r}
+for (d in 1:7){
+  print(unique(filter(SECOND_DEC_FEB, month == "Dec", day == d)$time_point))
+  print(unique(filter(SECOND_DEC_FEB, month == "Feb", day == d)$time_point))
+}
+```
+```{r}
+SECOND_DEC_FEB%>%
+  group_by(month, day)%>%
+  summarize(length(unique(time_point)))
+```
+
+These look comparable between experiments!
+
+```{r}
+FINAL_DEC_FEB <- SECOND_DEC_FEB%>%
+  ungroup()%>%
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, med)%>%
+  do(dec_temp = filter(., month == "Dec")$med, feb_temp = filter(., month == "Feb")$med)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(dec_temp) == length(feb_temp), summary(lm(dec_temp ~ feb_temp))$adj.r.squared, NA))
+head(FINAL_DEC_FEB)
+```
+
+```{r}
+summary(FINAL_DEC_FEB$adj_r_squared)
+```
+
+What are these NA values?
+
+```{r}
+FINAL_DEC_FEB%>%filter(is.na(adj_r_squared))
+```
+
+They're all for the NPQ measurement!
+
+```{r}
+depi_all%>%
+  filter(measurement == "npq", month %in% c("Dec", "Feb"))%>%
+  group_by(month, day)%>%
+  summarize(length(unique(time_point)))
+```
+
+```{r}
+TEMP_DEC_FEB_NPQ <- SECOND_DEC_FEB%>%
+  filter(measurement == "npq")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "npq", month == "Dec")$time_point), unique(filter(depi_all, measurement == "npq", month == "Feb")$time_point))))
+ 
+  
+SECOND_DEC_FEB <- rbind(filter(SECOND_DEC_FEB, measurement != "npq"), TEMP_DEC_FEB_NPQ)
+
+SECOND_DEC_FEB%>%
+  group_by(day, month, measurement)%>%
+  summarize(length(unique(time_point)))%>%
+  arrange(measurement)%>%filter(measurement =="npq")
+```
+
+This looks a lot better - try the final pipeline again:
+
+```{r}
+FINAL_DEC_FEB <- SECOND_DEC_FEB%>%
+  ungroup()%>%
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, med)%>%
+  do(dec_temp = filter(., month == "Dec")$med, feb_temp = filter(., month == "Feb")$med)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(dec_temp) == length(feb_temp), summary(lm(dec_temp ~ feb_temp))$adj.r.squared, NA))
+head(FINAL_DEC_FEB)
+```
+
+
+```{r}
+summary(FINAL_DEC_FEB$adj_r_squared)
+```
+
+This removes the NA values. 
+
+## January and February
+
+
+```{r}
+FIRST_JAN_FEB <- depi_all%>%
+  ###Filter to only have the days in common - the shortest experiment is 7 days
+  ###Remove the mpk5-17 genotype
+    filter(month %in% c("Jan", "Feb"))%>%
+   filter(day < 8, genotype != "mpk5-17")%>%
+   group_by(month, day, measurement, time_point, genotype)%>%
+  ###Find the median measured value for each experiment/day/measurement/time_point/genotype combination
+   mutate(med = median(measured_value))%>%
+  ###Select only the columns listed
+   select(month, day, measurement, time_point, genotype, med)%>%
+  ###Remove duplicate rows
+   distinct()
+head(FIRST_JAN_FEB)
+```
+
+```{r}
+SECOND_JAN_FEB <- FIRST_JAN_FEB%>%
+   group_by(day, month)%>%
+  ###Find the number of time points for each day of each experiment
+   mutate(n = length(unique(time_point)))%>%
+   ungroup()%>%
+   group_by(day)%>%
+  ###Compare the number of time points between days of each experiment
+  ###Create a new column with the minimum of the length of time points
+   mutate(min = min(n))%>%
+   group_by(day, month, genotype)
+head(SECOND_JAN_FEB)
+
+filter(SECOND_JAN_FEB, n != min)%>%
+  select(month, day, n, min)%>%
+  distinct()
+```
+
+Okay, so now I need to make sure I select only the time points that they have in common.
+
+What are these time points?
+
+```{r}
+TEMP_JAN_FEB_NPQ <- SECOND_JAN_FEB%>%
+  filter(measurement == "npq")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "npq", month == "Jan")$time_point), unique(filter(depi_all, measurement == "npq", month == "Feb")$time_point))))
+ 
+  
+SECOND_JAN_FEB <- rbind(filter(SECOND_JAN_FEB, measurement != "npq"), TEMP_JAN_FEB_NPQ)
+
+SECOND_JAN_FEB%>%
+  group_by(day, month, measurement)%>%
+  summarize(length(unique(time_point)))%>%
+  arrange(measurement)%>%filter(measurement =="npq")
+  
+```
+
+Verify this gives us what we want: 
+
+```{r}
+for (d in 1:7){
+  print(unique(filter(SECOND_JAN_FEB, month == "Jan", day == d)$time_point))
+  print(unique(filter(SECOND_JAN_FEB, month == "Feb", day == d)$time_point))
+}
+```
+
+**There is an error in this rationale! I am assuming that there are the same number of measured values for each measurement. We will later see this is not the case.**
+
+```{r}
+FINAL_JAN_FEB <- SECOND_JAN_FEB%>%
+  ungroup()%>%
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, med)%>%
+  do(jan_temp = filter(., month == "Jan")$med, feb_temp = filter(., month == "Feb")$med)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(jan_temp) == length(feb_temp), summary(lm(jan_temp ~ feb_temp))$adj.r.squared, NA))
+head(FINAL_JAN_FEB)
+```
+
+```{r}
+summary(FINAL_JAN_FEB$adj_r_squared)
+```
+
+We still have some NA values - where are they?
+
+```{r}
+FINAL_JAN_FEB%>%filter(is.na(adj_r_squared), measurement == "npq")
+```
+
+Okay, so npq is fine - it's leafarea and phi2 I have to worry about! 
+
+To be on the safe side, consider each measurement seperately, and find the time points that overlap between them:
+
+```{r}
+TEMP_JAN_FEB_NPQ <- SECOND_JAN_FEB%>%
+  filter(measurement == "npq")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "npq", month == "Jan")$time_point), unique(filter(depi_all, measurement == "npq", month == "Feb")$time_point))))
+
+TEMP_JAN_FEB_LEAFAREA <- SECOND_JAN_FEB%>%
+  filter(measurement == "leafarea")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "leafarea", month == "Jan")$time_point), unique(filter(depi_all, measurement == "leafarea", month == "Feb")$time_point))))
+
+TEMP_JAN_FEB_PHI2 <- SECOND_JAN_FEB%>%
+  filter(measurement == "phi2")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "phi2", month == "Jan")$time_point), unique(filter(depi_all, measurement == "phi2", month == "Feb")$time_point))))
+
+ 
+  
+SECOND_JAN_FEB <- rbind(TEMP_JAN_FEB_LEAFAREA, TEMP_JAN_FEB_PHI2, TEMP_JAN_FEB_NPQ)
+
+
+head(SECOND_JAN_FEB)
+
+```
+
+
+```{r}
+FINAL_JAN_FEB <- SECOND_JAN_FEB%>%
+  ungroup()%>%
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, med)%>%
+  do(jan_temp = filter(., month == "Jan")$med, feb_temp = filter(., month == "Feb")$med)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(jan_temp) == length(feb_temp), summary(lm(jan_temp ~ feb_temp))$adj.r.squared, NA))
+```
+
+Let's see if this worked!
+
+```{r}
+summary(FINAL_JAN_FEB$adj_r_squared)
+```
+
+This looks a lot better! BUT we're getting an error - essentially perfect fit, summary may be unreliable.
+
+I suspect this could be caused by two things: either we are only comparing 3 or 4 points, making it really easy to fit a linear model. Or, it could be that the data points lie in a nearly perfect line when plotted against each other. 
+
+```{r}
+#FINAL_JAN_FEB$jan_temp
+summary(as.integer(summary(FINAL_JAN_FEB$jan_temp)[,1]))
+summary(as.integer(summary(FINAL_JAN_FEB$feb_temp)[,1]))
+
+```
+
+That's weird - it looks like all of the jan_temp and feb_temp vectors that I was comparing had 16 measured values in it.
+
+While there may be only 3 or 4 replicates of a certain genotype in an experiment, this isn't the problem, because we would have found the median of these values for 16 time points per day.
+
+So, I suspect there are a few very strong linear relationships in the comparisons that I made. 
+
+## December and January 
+
+```{r}
+FIRST_DEC_JAN <- depi_all%>%
+  ###Filter to only have the days in common - the shortest experiment is 7 days
+  ###Remove the mpk5-17 genotype
+    filter(month %in% c("Dec", "Jan"))%>%
+   filter(day < 8, genotype != "mpk5-17")%>%
+   group_by(month, day, measurement, time_point, genotype)%>%
+  ###Find the median measured value for each experiment/day/measurement/time_point/genotype combination
+   mutate(med = median(measured_value))%>%
+  ###Select only the columns listed
+   select(month, day, measurement, time_point, genotype, med)%>%
+  ###Remove duplicate rows
+   distinct()
+head(FIRST_DEC_JAN)
+```
+
+```{r}
+SECOND_DEC_JAN <- FIRST_DEC_JAN%>%
+   group_by(day, month)%>%
+  ###Find the number of time points for each day of each experiment
+   mutate(n = length(unique(time_point)))%>%
+   ungroup()%>%
+   group_by(day)%>%
+  ###Compare the number of time points between days of each experiment
+  ###Create a new column with the minimum of the length of time points
+   mutate(min = min(n))%>%
+   group_by(day, month, genotype)
+head(SECOND_DEC_JAN)
+
+filter(SECOND_DEC_JAN, n != min)%>%
+  select(month, day, n, min)%>%
+  distinct()
+```
+
+Okay, so now I need to make sure I select only the time points that they have in common.
+
+What are these time points?
+
+```{r}
+depi_all%>%
+  group_by(month, day)%>%
+  filter(day < 8)%>%
+  summarize(length(unique(time_point)))
+for (d in 1:7){
+  print(unique(filter(depi_all, month == "Dec", day == d)$time_point))
+  print(unique(filter(depi_all, month == "Jan", day == d)$time_point))
+}
+```
+
+
+```{r}
+SECOND_DEC_JAN <- SECOND_DEC_JAN%>%filter(time_point %in% c(intersect(unique(filter(depi_all, month == "Jan")$time_point), unique(filter(depi_all, month == "Dec")$time_point))))
+```
+
+Verify this gives us what we want: 
+
+```{r}
+for (d in 1:7){
+  print(unique(filter(SECOND_DEC_JAN, month == "Dec", day == d)$time_point))
+  print(unique(filter(SECOND_DEC_JAN, month == "Jan", day == d)$time_point))
+}
+```
+
+
+```{r}
+FINAL_DEC_JAN <- SECOND_DEC_JAN%>%
+  ungroup()%>%
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, med)%>%
+  do(dec_temp = filter(., month == "Dec")$med, jan_temp = filter(., month == "Jan")$med)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(jan_temp) == length(dec_temp), summary(lm(jan_temp ~ dec_temp))$adj.r.squared, NA))%>%
+  ###Here, just verify that it doesn't matter whether January or February goes first in creating the linear model when finding the adjusted R squared value
+  mutate(adj_r_squared_verift = ifelse(length(jan_temp) == length(dec_temp), summary(lm(dec_temp ~ jan_temp))$adj.r.squared, NA))
+
+
+head(FINAL_DEC_JAN)
+```
+
+```{r}
+summary(FINAL_DEC_JAN$adj_r_squared)
+```
+
+Same problem - we have NA values somewhere.
+
+I suspect that different experiments have a different number of measured values per day.
+
+Let's address this:
+
+```{r}
+TEMP_DEC_JAN_NPQ <- SECOND_DEC_JAN%>%
+  filter(measurement == "npq")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "npq", month == "Dec")$time_point), unique(filter(depi_all, measurement == "npq", month == "Jan")$time_point))))
+
+TEMP_DEC_JAN_LEAFAREA <- SECOND_DEC_JAN%>%
+  filter(measurement == "leafarea")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "leafarea", month == "Jan")$time_point), unique(filter(depi_all, measurement == "leafarea", month == "Dec")$time_point))))
+
+TEMP_DEC_JAN_PHI2 <- SECOND_DEC_JAN%>%
+  filter(measurement == "phi2")%>%
+  group_by(month)%>%
+  filter(time_point %in% c(intersect(unique(filter(depi_all, measurement == "phi2", month == "Jan")$time_point), unique(filter(depi_all, measurement == "phi2", month == "Dec")$time_point))))
+
+ 
+  
+SECOND_DEC_JAN <- rbind(TEMP_DEC_JAN_LEAFAREA, TEMP_DEC_JAN_PHI2, TEMP_DEC_JAN_NPQ)
+
+
+head(SECOND_DEC_JAN)
+```
+
+
+```{r}
+FINAL_DEC_JAN <- SECOND_DEC_JAN%>%
+  ungroup()%>%
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, med)%>%
+  do(dec_temp = filter(., month == "Dec")$med, jan_temp = filter(., month == "Jan")$med)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(dec_temp) == length(jan_temp), summary(lm(jan_temp ~ dec_temp))$adj.r.squared, NA))
+```
+
+```{r}
+summary(FINAL_DEC_JAN$adj_r_squared)
+```
+
+Good! We removed all NA values. Note we get the same error as the comparison of Jan to Feb. Again, I suspect this is because some of the comparisons have a very strong linear relationship.
+
+## Merge All Comparisions
+
+I want to create one data frame. Each genotype and day will have three adjusted R squared associated with it - one for each of comparison of Dec to Jan, Jan to Feb, and Dec to Jan.
+
+```{r}
+temp <- merge(FINAL_DEC_JAN, FINAL_JAN_FEB, by = c("genotype", "day", "measurement"))%>%rename( DEC_JAN_R= adj_r_squared.x, JAN_FEB_R = adj_r_squared.y)
+
+final_r <- merge(temp, FINAL_DEC_FEB, by = c("genotype", "day", "measurement"))%>%rename(DEC_FEB_R = adj_r_squared)%>%
+  select(genotype, day, measurement, DEC_JAN_R, JAN_FEB_R, DEC_FEB_R)
+
+```
+
+# Summary and Visualizations
+
+Average adjusted R squared value for each measurement.
+
+```{r}
+final_r%>%
+  group_by(measurement)%>%
+  mutate(average_R = mean(c(DEC_JAN_R, DEC_FEB_R, JAN_FEB_R)))%>%
+  select(measurement, average_R)%>%
+  distinct()
+
+```
+
+## Average All Experiments - Adjusted R Squared 
+
+Average adjusted R squared value, for each day and measurement.
+
+```{r}
+line_plot <- final_r%>%
+  group_by(measurement, day)%>%
+  mutate(average_R = mean(c(DEC_JAN_R, DEC_FEB_R, JAN_FEB_R)))%>%
+  mutate(sd = sd(c(DEC_JAN_R, DEC_FEB_R, JAN_FEB_R)))%>%
+  select(measurement, day, average_R, sd)%>%
+  distinct()
+
+line_plot
+
+ggplot(data = line_plot, aes(x = day, y = average_R, color = measurement))+
+  geom_line(size = 1.5)+
+  #geom_errorbar(aes(ymin = average_R - sd, ymax = average_R + sd), width = 0.1)+
+
+  theme_foundation(base_family = "Calibri", base_size = 15)+
+  ylim(0,1)+
+  labs(x = "Day", y = "Average Adjusted R Squared")+
+  scale_x_discrete(limits = 1:7)
+  
+```
+
+Note: I added error bars with the standard deviation, but it made the plot hard to interpret, so I chose not to include them. 
+
+It looks like the phi2 measurement has a significantly lower adjusted R squared value than the other two measurements on days 1, 4, 6, and 7. **Why do we see this?**
+
+Npq has a consistently high adjusted r squared value, but the adjusted r squared value for leafarea decreases on days 6 and 7.
+
+Now, instead of averaging all three comparisons with each other, lets see how they compare with each other.
+
+Here, create a longer data frame. Instead of columns with each comparison, make the comparison a category in a new column - comp. This will make is easier to use facet_grid to facet by experiment and measurement.  
+
+```{r}
+head(final_r)
+corr_plot_data <- final_r%>%
+pivot_longer(c("JAN_FEB_R", "DEC_JAN_R", "DEC_FEB_R"), names_to = "comp", values_to = "adj_R")
+head(corr_plot_data)
+```
+
+## Average Adjusted R Squared, Each Measurement
+
+We will make three plots - one for each measurement. Plotted will be each of the three comparisons.
+
+The plotted adjusted R squared value will be the average across all genotypes. 
+
+```{r}
+line_npq <-corr_plot_data%>%
+  filter(measurement == "npq")%>%
+  group_by(day, comp)%>%
+  mutate(avg = mean(c(adj_R)))%>%
+  select(-genotype)%>%
+  distinct()
+
+line_phi2 <-corr_plot_data%>%
+  filter(measurement == "phi2")%>%
+  group_by(day, comp)%>%
+  mutate(avg = mean(c(adj_R)))%>%
+  select(-genotype)%>%
+  distinct()
+
+line_leafarea <-corr_plot_data%>%
+  filter(measurement == "leafarea")%>%
+  group_by(day, comp)%>%
+  mutate(avg = mean(c(adj_R)))%>%
+  select(-genotype)%>%
+  distinct()
+
+ggplot(data = line_npq, aes(x = day, y = avg, color = comp))+
+  geom_line(size = 1.5)+
+  theme_foundation(base_family = "Calibri", base_size = 15)+
+  ylim(0,1)+
+  labs(x = "Day", y = "Average Adjusted R Squared", title = "NPQ - Average Adjusted R Squared Value")+
+  scale_x_discrete(limits = 1:7)
+
+ggplot(data = line_phi2, aes(x = day, y = avg, color = comp))+
+  geom_line(size = 1.5)+
+  theme_foundation(base_family = "Calibri", base_size = 15)+
+  ylim(0,1)+
+  labs(x = "Day", y = "Average Adjusted R Squared", title = "Phi2 - Average Adjusted R Squared Value")+
+  scale_x_discrete(limits = 1:7)
+
+ggplot(data = line_leafarea, aes(x = day, y = avg, color = comp))+
+  geom_line(size = 1.5)+
+  theme_foundation(base_family = "Calibri", base_size = 15)+
+  ylim(0,1)+
+  labs(x = "Day", y = "Average Adjusted R Squared", title = "Leafarea - Average Adjusted R Squared Value")+
+  scale_x_discrete(limits = 1:7)
+#   
+```
+
+## Heat Maps
+
+Here, plot the same data, but without average across genotypes. 
+
+Create heat maps for each genotype and measurement, with facets for each of the three comparisons. 
+
+```{r echo = FALSE}
+library(stringi)
+add_number <- function(data_frame){
+  ###First, if the genotype is Col0 (only genotype with length 4), assign 0 as number
+  ###Else, assign number as genotype with "mpk" removed
+  ###Example: mpk1 will be 1, mpk1-17 will be 1-17
+  data_frame <- data_frame%>%
+    mutate(number = ifelse(genotype != "Col0",(stri_sub(genotype, 4, length(genotype))), 0))
+  ###Next, for all double mutants, replace "-" with "0"
+  ###Example: 1-17 becomes 1017
+  data_frame$number <- as.numeric(gsub("-","0", data_frame$number))
+  ###Almost there! There's a problem with two single digit double mutants
+  ###We need a four digit number to sort correctly 
+  ###Example: mpk1-3 -> 1-3 -> 103, but we need it to be 1003 to sort correctly
+  data_frame$number[data_frame$number == "103"] <- "1003"
+  data_frame$number[data_frame$number == "506"] <- "5006"
+  data_frame$number[data_frame$number == "608"] <- "6008"
+  data_frame$number[data_frame$number == "609"] <- "6009"
+  ###Convert number to a numberic in order to sort
+  data_frame$number <- as.numeric(data_frame$number)
+  data_frame <- data_frame%>%arrange(number)
+  data_frame <- data_frame%>%mutate(number_2 = number)
+  data_frame$number_2[nchar(data_frame$number_2) == 4] <- 0
+  data_frame$number_2[nchar(data_frame$number_2) == 5] <- 0
+  return(data_frame)
+}
+```
+
+
+```{r}
+library(RColorBrewer)
+
+corr_plot_data <- corr_plot_data%>%
+  mutate(bin = case_when(
+    (adj_R>=-0.1 & adj_R < 0.2 ~ "-0.1 <= Adj. R Sq. < 0.2"), 
+    (adj_R>=.2& adj_R < 0.4 ~ "0.2 <= Adj. R Sq. < 0.4"), 
+    (adj_R>=.4 & adj_R < 0.6 ~ "0.4 <= Adj. R Sq. < 0.6"), 
+    (adj_R>=.6 & adj_R < 0.8 ~ "0.6 <= Adj. R Sq. < 0.8"), 
+    (adj_R>=.8 & adj_R < 0.9 ~ "0.8 <= Adj. R Sq. < 0.9"), 
+    (adj_R>=.9 & adj_R < 1 ~ "0.9 <= Adj. R Sq. < 1.0"))) 
+
+corr_plot_data <- add_number(corr_plot_data)
+corr_plot_data$genotype <- reorder(corr_plot_data$genotype, desc(corr_plot_data$number))
+```
+
+
+```{r}
+###NPQ Heat Map
+ggplot(data = filter(corr_plot_data, measurement == "npq"), aes(x =day, y = genotype))+
+  geom_tile(aes(fill = bin))+
+  facet_grid(~comp)+
+  theme_tufte(base_family = "Calibri", base_size = 12)+
+  theme(
+        axis.ticks.x=element_blank(),
+        panel.spacing = unit(0, "lines"),
+        strip.background.y = element_blank(),
+        strip.text.y = element_blank())+
+  labs(fill = "Bin", x = "Day", y = "Genotype", title = "NPQ - Average Adjusted R Squared Value")+
+  scale_x_discrete(limits = 1:7)+
+  scale_fill_brewer(type = "seq", palette = "Reds")
+
+###Phi2 Heat Map
+ggplot(data = filter(corr_plot_data, measurement == "phi2"), aes(x =day, y = genotype))+
+  geom_tile(aes(fill = bin))+
+  facet_grid(~comp)+
+  theme_tufte(base_family = "Calibri", base_size = 12)+
+  theme(
+        axis.ticks.x=element_blank(),
+        panel.spacing = unit(0, "lines"),
+        strip.background.y = element_blank(),
+        strip.text.y = element_blank())+
+  labs(fill = "Bin", x = "Day", y = "Genotype", title = "Phi2 - Average Adjusted R Squared Value")+
+  scale_x_discrete(limits = 1:7)+
+  scale_fill_brewer(type = "seq", palette = "Reds")
+
+### Leafarea Heat Map
+ggplot(data = filter(corr_plot_data, measurement == "leafarea"), aes(x =day, y = genotype))+
+  geom_tile(aes(fill = bin))+
+  facet_grid(~comp)+
+  theme_tufte(base_family = "Calibri", base_size = 12)+
+  theme(
+        axis.ticks.x=element_blank(),
+        panel.spacing = unit(0, "lines"),
+        strip.background.y = element_blank(),
+        strip.text.y = element_blank())+
+  labs(fill = "Bin", x = "Day", y = "Genotype", title = "Leafarea - Average Adjusted R Squared Value")+
+  scale_x_discrete(limits = 1:7)+
+  scale_fill_brewer(type = "seq", palette = "Reds")
+
+
+```
+
+Something is clearly happening on days 1, 4, 6, and 7 for phi2. Maybe there are different light treatments?
+
+Let's make sure the intersect approach is the one I want to take:
+
+```{r}
+a<-unique(filter(depi_all, measurement == "npq", day == "2", month == "Dec")$time_point)
+b<-unique(filter(depi_all, measurement == "npq", day == "2", month == "Feb")$time_point)
+a
+b
+intersect(a,b)
+```
+
+
+
+This is what I want it to do. **But, we have to consider what we are missing when we exclude these time points.**
+
+Leafarea measurements are uncorrelated towards the end of each experiment. 
+
+## Investigate Days 1, 4, 6, and 7 for Phi2
+
+Let's look at this relationship. Here are the most uncorrelated days for phi2:
+
+```{r}
+test_loop <- FINAL_DEC_FEB%>%
+filter(day %in% c(1,4,6,7), measurement == "phi2")
+
+for (row in 1:nrow(test_loop)){
+  DATASET = test_loop
+  X = as.vector(unlist(DATASET[row, 4]))
+  Y = as.vector(unlist(DATASET[row, 5]))
+  DATA = data.frame(X,Y)
+  DAY = DATASET[row, 1]
+  GENOTYPE = DATASET[row,2]
+  MEASUREMENT = DATASET[row, 3]
+  PLOT <- ggplot(data = DATA, aes(x = X, y = Y))+
+    geom_point()+
+  geom_smooth(method = "lm", se = FALSE, aes(color = "black"), formula = y~x)+
+  geom_abline(aes(slope = 1, intercept = 0, color = "red"), show.legend = FALSE)+
+  labs(title = paste("Day ", DAY, "- ", GENOTYPE, "- ", MEASUREMENT, "-\n Comparing December and February", sep = ""), x = "December Measured Value", y = "February Measured Value",
+       subtitle = paste(paste("Adjusted R-Squared = ", round(summary(lm(Y~X))$adj.r.squared, 3), sep = ""
+, ","),  paste("y = ", round(coef(summary(lm(Y~X)))[2,1], 3),"x + ",round(coef(summary(lm(Y~X)))[1,1],3), sep = "")), sep = "")+
+  scale_colour_manual(name=c('Lines', "Adjusted R-Squared Value"),
+                      labels = c("Line of Best Fit", "y = x "),  
+                      values=c("red", "blue"))+
+  theme_foundation(base_family = "Calibri", base_size = 15)
+  print(PLOT)
+}
+
+  
+```
+
+## Histograms 
+
+Here are histograms with the distributions of adjusted R squared values for each measurement and comparison: 
+
+```{r}
+library(lemon)
+ggplot(data = corr_plot_data, aes(x = adj_R, fill = day))+
+  geom_histogram()+
+  facet_rep_grid(comp~measurement, repeat.tick.labels = "bottom")+
+  theme_foundation(base_family = "Calibri", base_size = 15)+
+  labs(x = "Adjusted R Squared Value", y ="Count", title = "Adjusted R Squared Frequency")
+
+```
+
+# Correlation Plots
+
+Here is a loop to create all plots in the December and February comparison.
+
+This can also be applied to comparison between December and January and January and February, but this is a good starting point.
+
+Note that in some cases, the y = x line doesn't appear on the plot - mostly for the leaf area and phi2 measurements. This is becasue it is not within the x and y bounds of the plotted comparisons.  
+
+```{r}
+for (row in 1:nrow(FINAL_DEC_FEB)){
+  DATASET = FINAL_DEC_FEB
+  X = as.vector(unlist(DATASET[row, 4]))
+  Y = as.vector(unlist(DATASET[row, 5]))
+  DATA = data.frame(X,Y)
+  DAY = DATASET[row, 1]
+  GENOTYPE = DATASET[row,2]
+  MEASUREMENT = DATASET[row, 3]
+  PLOT <- ggplot(data = DATA, aes(x = X, y = Y))+
+    geom_point()+
+  geom_smooth(method = "lm", se = FALSE, aes(color = "black"), formula = y~x)+
+  geom_abline(aes(slope = 1, intercept = 0, color = "red"), show.legend = FALSE)+
+  labs(title = paste("Day ", DAY, "- ", GENOTYPE, "- ", MEASUREMENT, "-\n Comparing December and February", sep = ""), x = "December Measured Value", y = "February Measured Value",
+       subtitle = paste(paste("Adjusted R-Squared = ", round(summary(lm(Y~X))$adj.r.squared, 3), sep = ""
+, ","),  paste("y = ", round(coef(summary(lm(Y~X)))[2,1], 3),"x + ",round(coef(summary(lm(Y~X)))[1,1],3), sep = "")), sep = "")+
+  scale_colour_manual(name=c('Lines', "Adjusted R-Squared Value"),
+                      labels = c("Line of Best Fit", "y = x "),  
+                      values=c("red", "blue"))+
+  theme_foundation(base_family = "Calibri", base_size = 15)
+  print(PLOT)
+}
+
+```
+
+
+# BELOW THIS IS SCRATCH WORK!
+
+```{r eval = FALSE}
+A = FIRST%>%filter(month == "Dec", measurement == "leafarea", genotype == "Col0", day == "1")
+
+B = FIRST%>% filter(month == "Feb", measurement == "leafarea", genotype == "Col0", day == "1")
+
+nrow(A)
+nrow(B)
+```
+
+
+
+```{r eval = FALSE}
+test <- depi_all%>%
+  ###Comparison between the Dec and Feb experiment 
+  filter(month %in% c("Dec", "Feb"), genotype != "mpk5-17", day < 8)%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement, individual_plant_metadata)%>%
+  arrange(time_point, measured_value)%>%
+  
+  # do(dec_rep = length(filter(.,month == "Dec")$individual_plant_metadata), feb_rep = length(filter(.,month == "Feb")$individual_plant_metadata))%>%
+  # 
+  do(feb_index = ifelse(length(filter(.,month == "Dec")$individual_plant_metadata) < length(filter(.,month == "Feb")$individual_plant_metadata), sample(1:length(filter(.,month == "Feb")$individual_plant_metadata), length(filter(.,month == "Dec")$individual_plant_metadata), replace = FALSE), NA),
+     
+     dec_index = ifelse(length(filter(.,month == "Dec")$individual_plant_metadata) > length(filter(.,month == "Feb")$individual_plant_metadata), sample(1:length(filter(.,month == "Dec")$individual_plant_metadata), length(filter(.,month == "Feb")$individual_plant_metadata), replace = FALSE), NA))
+     
+
+
+
+  # do(dec_temp = filter(., month == "Dec")$measured_value, feb_temp = filter(., month == "Feb")$measured_value)%>%
+```
+
+```{r eval = FALSE}
+test <- depi_all%>%
+  filter(month %in% c("Dec", "Feb"))%>%
+  group_by(month, genotype)%>%
+  mutate(X = length(unique(individual_plant_metadata)))%>%
+  ungroup()%>%
+  group_by(genotype)%>%
+  mutate(X_2 = min(X))%>%
+  mutate(drop = X - X_2)%>%
+###So, X_2 is the number of replicates I need from each experiment in order to compare them
+  ungroup()%>%
+  group_by(genotype, experiment)%>%
+  do(if(.$drop != 0){.$})
+
+try_this <- test%>%
+  group_by(month, individual_plant_metadata)
+
+#if(X > X_2){X}
+
+###This is what I want to do:
+###For the longer list of individual_plant_metadata
+a <- 1:10
+###Sample, where 2 is the difference between X and X_2
+a[-sample(1:length(a), 2)]
+
+         
+         
+         
+  
+```
+
+```{r eval = FALSE}
+test <- depi_all%>%
+  group_by(genotype, month)%>%
+  mutate(X = length(unique(individual_plant_metadata)))%>%
+  ungroup()%>%
+  group_by(genotype)%>%
+  mutate(X_2 = min(X))%>%
+  select(X, X_2, genotype, individual_plant_metadata, month)%>%
+  distinct()
+
+
+use_this <- test%>%
+  group_by(genotype, month)%>%
+  select(X, X_2, individual_plant_metadata)%>%
+  distinct()
+
+use_this%>%
+  sample_frac(X_2/X)
+           
+```
+
+```{r eval = FALSE}
+# maybe <- use_this%>%
+#   group_by(genotype, month)%>%
+#   sample_frac(X_2/X, replace = FALSE)%>%
+#   mutate(X_3 = length(individual_plant_metadata))
+# 
+# depi_all%>%
+#   
+FIRST <- depi_all%>%
+  filter(month %in% c("Dec", "Feb"), genotype != "mpk5-17", day < 8)%>%
+  group_by(genotype, month)%>%
+  mutate(n_reps = length(unique(individual_plant_metadata)))%>%
+  ungroup()%>%
+  group_by(genotype)%>%
+  mutate(min_n_reps = min(n_reps))%>%
+  group_by(genotype, measurement)%>%
+  distinct()
+
+SECOND<- FIRST%>%
+  group_by(genotype, month, measurement)%>%
+  sample_frac(min_n_reps/n_reps, replace = FALSE)
+
+THIRD <- SECOND%>%
+  ungroup()%>%
+  group_by(day, month)%>%
+  mutate(len_tp = length(unique(time_point)))%>%
+  ungroup()%>%
+  group_by(day)%>%
+  mutate(min_tp = min(len_tp))%>%
+  group_by(genotype, month, measurement, day)%>%
+  sample_frac(min_tp/len_tp, replace = FALSE)
+  #  ###Comparison between the Dec and Feb experiment
+  # 
+  # 
+  # group_by(day, genotype, month)%>%
+  # mutate(n_tp = length(time_point))%>%
+  # ungroup()%>%
+  # group_by(day, genotype)%>%
+  # mutate(min_tp = min(n_tp))%>%
+  # select(min_tp, n_tp)
+# %>%
+#   group_by(genotype, month, day)%>%
+#   sample_frac(min_tp/n_tp, replace = FALSE)
+#   # group_by(day, genotype)%>%
+#   summarize(min_tp = min(n_tp))%>%
+#   ungroup()%>%
+#   group_by(month, day)%>%
+#   sample_frac(min_tp / n_tp, replace = FALSE)
+
+
+THIRD%>%
+  ungroup()%>%
+   filter(month %in% c("Dec", "Feb"), genotype != "mpk5-17", day < 8)%>%
+   ###For each time point and measurement:
+   group_by(day, genotype, measurement)%>%
+   arrange(time_point, measured_value)%>%
+# 
+# 
+# 
+   do(dec_temp = filter(., month == "Dec")$measured_value, feb_temp = filter(., month == "Feb")$measured_value)%>%
+   mutate(adj_r_squared = ifelse(length(dec_temp) == length(feb_temp), summary(lm(dec_temp ~ feb_temp))$adj.r.squared, NA))
+
+
+
+# use_this <- test%>%
+#   group_by(genotype, month)%>%
+#   select(X, X_2, individual_plant_metadata)%>%
+#   distinct()
+  
+  
+```
+
+```{r eval = FALSE}
+A <- filter(depi_all, day == "1", genotype == "Col0", measurement == "leafarea", month == "Dec")
+
+B <- filter(depi_all, day == "1", genotype == "Col0", measurement == "leafarea", month == "Feb")
+
+nrow(A)
+nrow(B)
+
+length(unique(A$individual_plant_metadata))
+length(unique(B$individual_plant_metadata))
+
+B <- B%>%
+  sample_frac(7/8, replace = FALSE)
+
+nrow(A)
+nrow(B)
+
+length(unique(A$individual_plant_metadata))
+length(unique(B$individual_plant_metadata))
+```
+
+
+```{r eval = FALSE}
+###When Feb is shorter
+feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+###When Dec is shorter
+dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+```
+
+
+
+```{r eval = FALSE}
+ifelse((length(feb_temp) < length(dec_temp)), summary(lm(sort(sample(dec_temp, size = length(feb_temp), replace = FALSE))~feb_temp))$adj.r.squared, summary(lm(dec_temp ~ sort(sample(feb_temp, size = length(dec_temp), replace = FALSE)))$adj.r.squared))
+```
+
+
+
+```{r eval = FALSE}
+for (d in c(1:7)){
+  ###The unique genotypes for all experiments will be the same; just use the February experiment to loop through
+  for (g in unique(feb_data$genotype)){
+    for (m in unique(feb_data$measurement)){
+      dec_temp <- dec_data%>%
+        filter(genotype == g, day == d, measurement == m)%>%
+        group_by(time_point)%>%
+        arrange(time_point, measured_value)
+      jan_temp <- jan_data%>%
+        filter(genotype == g, day == d, measurement == m)%>%
+        group_by(time_point)%>%
+        arrange(time_point, measured_value)
+      feb_temp <- feb_data%>%
+        filter(genotype == g, day == d, measurement == m)%>%
+        group_by(time_point)%>%
+        arrange(time_point, measured_value)
+      if (nrow(dec_temp) == nrow(jan_temp)){
+        plot_data <- data.frame(dec_temp$measured_value, jan_temp$measured_value)
+        print(head(plot_data))
+      }
+    }
+  }
+}
+```
+
+
+*As a note, the R-squared value is the output of cor squared!*
+
+```{r eval = FALSE}
+for (i in unique(depi_all$day)){
+  for (j in unique(depi_all$measurement)){
+    test <- depi_all%>%
+      filter(measurement == j)%>%
+      filter(day == i)%>%
+      spread(month, measured_value)
+  
+    cor(test$Dec[!is.na(test$Dec)], test$Jan[!is.na(test$Jan)])
+  
+  }}
+
+```
+
+```{r eval = FALSE}
+test <- depi_all%>%
+      filter(measurement == "npq")%>%
+      filter(day == "1")%>%
+      mutate(time_point = round(time_point, digits = 1))%>%
+      spread(month, measured_value)%>%
+      arrange(genotype, time_point)
+
+test_2 <- test%>%
+  filter(day == "1", genotype == "mpk17-20", measurement == "npq")
+
+a <- test_2$Dec[!is.na(test_2$Dec)]
+b <- test_2$Jan[!is.na(test_2$Jan)]
+
+#test_2$Dec[!is.na(test_2$Dec)]
+
+#cor(a,b)
+```
+
+
+```{r eval = FALSE}
+depi_all%>%
+  filter(month %in% c("Dec, Jan"))%>%
+  group_by(month, genotype, measurement, day)
+
+
+```
+
+```{r eval = FALSE}
+maybe <- merge(jan_data, dec_data, by = c("genotype", "measurement", "time_point"))
+```
+
+This is wrong - I would have been comparing different time points between experiments! 
+
+```{r eval = FALSE}
+# SECOND <- FIRST%>%
+#    group_by(day, month)%>%
+#   ###Find the number of time points for each day of each experiment
+#    mutate(n = length(unique(time_point)))%>%
+#    ungroup()%>%
+#    group_by(day)%>%
+#   ###Compare the number of time points between days of each experiment
+#   ###Create a new column with the minimum of the length of time points
+#    mutate(min = min(n))%>%
+#    group_by(day, month, genotype)%>%
+#   ###For each day of each experiment for each genotype, sample a fraction of the rows
+#   ###Are the number of time points the same between experiments? Sample 1/1, or all rows from both
+#   ###Does the shorter experiment have 15 time points but the longer experiment has 
+#    sample_frac(min/n, replace = FALSE)
+# head(SECOND)
+```
+
+Here, I don't use the median, and randomly sample individual plants when the number of replicates is not equal. 
+
+This is wrong:
+
+```{r eval = FALSE}
+depi_all%>%
+  ###Comparison between the Jan and Feb experiment for day 1
+  filter(month %in% c("Jan", "Feb"))%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, measured_value)%>%
+  summarize(n = length(time_point))
+
+```
+
+## Comparisons
+
+I will conduct three pipelines for comparisions: Dec to Jan, Jan to Feb, and Dec to Feb.
+
+For all comparisons, I will use the depi_all file.
+
+1. Filter to select only the experiments you want to compare.
+2. Filter to select only days 1 - 7.
+3. Group by day, genotype, and measurement.
+4. Arrange by time point and measured value.
+  +  Arrange time point in increasing order. Then, arrange again so the measured values so they are in increasing order also. So, we will be comparing the smallest plants in each experiment to each other. (The order they appear in the list is arbitrary, which doesn't make sense when making comparisons.)
+5. Create two new tibbles - jan_temp and feb_temp. These are the measured values for each experiment, only for each specific day/genotype/measurement combination.
+6. If the lengths are the same, great! Find the adjusted r squared value. If not, report an NA value. (Come back to this - how to find correlation when samples differ in length?)
+
+### Compare January and February
+
+```{r eval = FALSE}
+comp_jan_feb <- depi_all%>%
+  ###Comparison between the Jan and Feb experiment 
+  filter(month %in% c("Jan", "Feb"))%>%
+  filter(day < 8)%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, measured_value)%>%
+  do(jan_temp = filter(., month == "Jan")$measured_value, feb_temp = filter(., month == "Feb")$measured_value)%>%
+  mutate(adj_r_squared = ifelse(length(jan_temp) == length(feb_temp), summary(lm(jan_temp ~ feb_temp))$adj.r.squared, NA))%>%
+  print(n = Inf)
+```
+
+
+### Compare January and December
+
+```{r eval = FALSE}
+comp_dec_jan <- depi_all%>%
+  ###Comparison between the Jan and Dec experiment
+  filter(month %in% c("Jan", "Dec"))%>%
+  filter(day < 8)%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, measured_value)%>%
+  do(jan_temp = filter(., month == "Jan")$measured_value, dec_temp = filter(., month == "Dec")$measured_value)%>%
+  mutate(adj_r_squared = ifelse((length(jan_temp) == length(dec_temp)), summary(lm(jan_temp ~ dec_temp))$adj.r.squared, NA))%>%
+  print(n = Inf)
+```
+
+### Compare December and February
+
+```{r eval = FALSE}
+comp_feb_dec <- depi_all%>%
+  ###Comparison between the Dec and Feb experiment 
+  filter(month %in% c("Dec", "Feb"))%>%
+  filter(day < 8)%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, measured_value)%>%
+  do(dec_temp = filter(., month == "Dec")$measured_value, feb_temp = filter(., month == "Feb")$measured_value)%>%
+  mutate(adj_r_squared = ifelse(length(dec_temp) == length(feb_temp), summary(lm(dec_temp ~ feb_temp))$adj.r.squared, NA))%>%
+  print(n = Inf)
+```
+
+```{r eval = FALSE}
+summary(comp_feb_dec$adj_r_squared)
+summary(comp_dec_jan$adj_r_squared)
+summary(comp_jan_feb$adj_r_squared)
+
+```
+
+So, clearly I have a problem: in most comparisons, the number of replicates per genotype is not the same, and I can't find the adjusted-r-squared value.
+
+Approach to solve this:
+
+Randomly choose from the experiment with too many replicates to match the length of the other experiment.
+
+Repeat this multiple times and take the average of the comparisons - this should be a good approximate value for the adjusted-r-squared value.
+
+```{r eval = FALSE}
+comp_feb_dec <- depi_all%>%
+  ###Comparison between the Dec and Feb experiment 
+  filter(month %in% c("Dec", "Feb"))%>%
+  filter(day < 8)%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, measured_value)%>%
+  do(dec_temp = filter(., month == "Dec")$measured_value, feb_temp = filter(., month == "Feb")$measured_value)%>%
+  mutate(adj_r_squared = ifelse(length(dec_temp) == length(feb_temp), summary(lm(dec_temp ~ feb_temp))$adj.r.squared, NA))%>%
+  mutate(try_this = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(sort(sample(dec_temp, size = length(feb_temp), replace = FALSE))~feb_temp))$adj.r.squared, summary(lm(dec_temp ~ sort(sample(feb_temp, size = length(dec_temp), replace = FALSE)))$adj.r.squared)))%>%
+  print(n = Inf)
+
+
+ifelse(length(feb_temp) > length(dec_temp), summary(lm(dec_temp ~ sort(sample(feb_temp, size = length(dec_temp), replace = FALSE)))$adj.r.squared), NA)
+```
+
+
+```{r eval = FALSE}
+###Raw comparisons
+comp_feb_dec <- depi_all%>%
+  ###Comparison between the Dec and Feb experiment 
+  filter(month %in% c("Dec", "Feb"))%>%
+  ###Some experiments don't have mpk5-17, so remove
+  filter(genotype != "mpk5-17")%>%
+  ###Only compare the days they have in common
+  filter(day < 8)%>%
+  ###For each time point and measurement:
+  group_by(day, genotype, measurement)%>%
+  arrange(time_point, measured_value)%>%
+  do(dec_temp = filter(., month == "Dec")$measured_value, feb_temp = filter(., month == "Feb")$measured_value)%>%
+  ###If there are an equal number of replicates, find the adj-R-squared normal
+  mutate(adj_r_squared = ifelse(length(dec_temp) == length(feb_temp), summary(lm(dec_temp ~ feb_temp))$adj.r.squared, NA))%>%
+  ###If there are more Dec than Feb replicates
+    mutate(more_dec_rep_1 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+  ###Do this five more times, so we can take the average adj-R-squared
+  mutate(more_dec_rep_2 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+  mutate(more_dec_rep_3 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+      mutate(more_dec_rep_4 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+      mutate(more_dec_rep_5 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+      mutate(more_dec_rep_6 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+  ###Do this five more times, so we can take the average adj-R-squared
+  mutate(more_dec_rep_7 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+  mutate(more_dec_rep_8 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+      mutate(more_dec_rep_9 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+      mutate(more_dec_rep_10 = ifelse((length(feb_temp) < length(dec_temp)), summary(lm(dec_temp[c(sort(sample(1:length(dec_temp), length(feb_temp), replace = FALSE)))]
+~feb_temp))$adj.r.squared, NA))%>%
+  
+  ###If there are more Feb than Dec replicates
+  mutate(more_feb_rep_1 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+  ###Do this five more times, so we can take the average adj-R-squared
+  mutate(more_feb_rep_2 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+    mutate(more_feb_rep_3 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+    mutate(more_feb_rep_4 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+    mutate(more_feb_rep_5 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+  mutate(more_feb_rep_6 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+  ###Do this five more times, so we can take the average adj-R-squared
+  mutate(more_feb_rep_7 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+    mutate(more_feb_rep_8 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+    mutate(more_feb_rep_9 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+    mutate(more_feb_rep_10 = ifelse((length(feb_temp) > length(dec_temp)), summary(lm(dec_temp~feb_temp[c(sort(sample(1:length(feb_temp), length(dec_temp), replace = FALSE)))]
+))$adj.r.squared, NA))%>%
+  
+  print(n = Inf)
+
+###Summary of comparisons
+summary_comp_feb_dec <- comp_feb_dec%>%
+  mutate(avg_adjR_more_dec = (more_dec_rep_1 + more_dec_rep_2 + more_dec_rep_3 + more_dec_rep_4 + more_dec_rep_5 + more_dec_rep_6 + more_dec_rep_7 + more_dec_rep_8 + more_dec_rep_9 + more_dec_rep_10)/10)%>%
+  mutate(avg_adjR_more_feb = (more_feb_rep_1 + more_feb_rep_2 + more_feb_rep_3 + more_feb_rep_4 + more_feb_rep_5 + more_feb_rep_6 + more_feb_rep_7 + more_feb_rep_8 + more_feb_rep_9 + more_feb_rep_10)/10)%>%
+  mutate(sd_more_dec = sd(c(more_dec_rep_1, more_dec_rep_2, more_dec_rep_3, more_dec_rep_4,more_dec_rep_5, more_dec_rep_6, more_dec_rep_7, more_dec_rep_8, more_dec_rep_9,more_dec_rep_10)))%>%
+  mutate(sd_more_feb = sd(c(more_feb_rep_1, more_feb_rep_2, more_feb_rep_3, more_feb_rep_4,more_feb_rep_5, more_feb_rep_6, more_feb_rep_7, more_feb_rep_8, more_feb_rep_9,more_feb_rep_10)))%>%
+  mutate(actual_adjR = adj_r_squared)%>%
+  select(day, genotype, measurement, actual_adjR, avg_adjR_more_dec, avg_adjR_more_feb, sd_more_dec, sd_more_feb)%>%
+  print(n = Inf)
+
+  
+
+
+```
+
+This is not the right approach. Note the large standard deviations.
+
+What I instead want to do is select each combination of replicate so that the lengths match.
+
+** This is the incorrect plot! **
+
+In order to use ggplot2, I need to merge the data to create one data frame.
+
+~~The general approach:
+
+1. Filter the data so I have the measured values for each genotype, each day, and each measurement.
+2. Group by time point. Within each time point, order the measured values from least to greatest.
+
+**Why am I doing this? For each time point, I have a range of replicates. The replicates are not in any particular order. So, if I look at the comparison between experiments at each specific time point, I could be comparing the greatest measured value from one experiment with the least measured value from the other. But, when I arrange by measured value (sorting from least to greatest), I am comparing the smallest values with each other, and the greatest values with each other. So, I get a better idea of the actual relationship between experiments**~~
+
+```{r}
+a<-filter(dec_data, genotype == "mpk1", measurement == "npq", day == "1")%>%
+  group_by(time_point)%>%
+  arrange(time_point, measured_value)
+
+b <- filter(jan_data, genotype == "mpk1", measurement == "npq", day == "1")%>%
+  group_by(time_point)%>%
+  arrange(time_point, measured_value)
+
+test <- data.frame(a$measured_value, b$measured_value)
+
+ggplot(data = test, aes(x = a.measured_value, y = b.measured_value))+
+  geom_point(alpha = 2/10)+
+  geom_smooth(method = "lm", se = FALSE, aes(color = "black"), formula = y~x)+
+  geom_abline(aes(slope = 1, intercept = 0, color = "red"), show.legend = FALSE)+
+  labs(title = "Day 1 - Mpk1 - NPQ - Comparing December and January", x = "December Median Measured Value", y = "January Median Measured Value",
+       subtitle = paste(paste("Adjusted R-Squared = ", round(summary(lm(test$b.measured_value~test$a.measured_value))$adj.r.squared, 3), sep = ""
+, ","),  paste("y = ", round(coef(summary(lm(test$b.measured_value~test$a.measured_value)))[2,1], 3),"x + ",round(coef(summary(lm(test$b.measured_value~test$a.measured_value)))[1,1],3), sep = "")), sep = "")+
+  scale_colour_manual(name=c('Lines', "Adjusted R-Squared Value"),
+                      labels = c("Line of Best Fit", "y = x "),  
+                      values=c("red", "blue"))+
+  theme_foundation(base_family = "Calibri", base_size = 15)
+
+coef(summary(lm(test$b.measured_value~test$a.measured_value)))[2,1]
+
+coef(summary(lm(test$b.measured_value~test$a.measured_value)))[1,1]
+
+
+ paste("y = ", round(coef(summary(lm(test$b.measured_value~test$a.measured_value)))[2,1], 3),"x + ",round(coef(summary(lm(test$b.measured_value~test$a.measured_value)))[1,1],3), sep = "")
+  
+```
+
+Ignore the previous approach.
+
+```{r}
+ggplot(data = corr_plot_data, aes(x = day, y = adj_R, color = genotype))+
+  facet_rep_grid(comp~measurement)+
+  geom_line(size = 1.5)+
+  theme_foundation(base_family = "Calibri", base_size = 15)+
+  ylim(0,1)+
+  labs(x = "Day", y = "Average Adjusted R Squared", title = "Adjusted R Squared - All Genotypes, All Comparisons")+
+  scale_x_discrete(limits = 1:7)
+```
+
+
+
+```{r}
+ggplot(data = corr_plot_data, aes(x = day, y = adj_R, color = genotype))+
+  facet_rep_grid(comp~measurement)+
+  geom_line(size = 1)+
+  theme_foundation(base_family = "Calibri", base_size = 10)+
+  ylim(0,1)+
+  labs(x = "Day", y = "Average Adjusted R Squared", title = "Adjusted R Squared - All Genotypes, All Comparisons")+
+  scale_x_discrete(limits = 1:7)
+```

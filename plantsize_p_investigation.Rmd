@@ -1,0 +1,740 @@
+---
+title: "Change in Leaf Area Investigation"
+author: "Abigail Seeger"
+date: "July 9, 2020"
+output:
+  pdf_document:
+    fig_height: 25
+    fig_width: 25
+    toc: yes
+    toc_depth: '4'
+  word_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = TRUE) 
+
+```
+## Load necessary packages
+
+```{r}
+library(dplyr)
+library(stringi)
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(viridis)
+```
+
+```{r add_number, echo = FALSE}
+add_number <- function(data_frame){
+  ###First, if the genotype is Col0 (only genotype with length 4), assign 0 as number
+  ###Else, assign number as genotype with "mpk" removed
+  ###Example: mpk1 will be 1, mpk1-17 will be 1-17
+  data_frame <- data_frame%>%
+    mutate(number = ifelse(genotype != "Col0",(stri_sub(genotype, 4, length(genotype))), 0))
+  ###Next, for all double mutants, replace "-" with "0"
+  ###Example: 1-17 becomes 1017
+  data_frame$number <- as.numeric(gsub("-","0", data_frame$number))
+  ###Almost there! There's a problem with two single digit double mutants
+  ###We need a four digit number to sort correctly 
+  ###Example: mpk1-3 -> 1-3 -> 103, but we need it to be 1003 to sort correctly
+  data_frame$number[data_frame$number == "103"] <- "1003"
+  data_frame$number[data_frame$number == "506"] <- "5006"
+  data_frame$number[data_frame$number == "608"] <- "6008"
+  data_frame$number[data_frame$number == "609"] <- "6009"
+  ###Convert number to a numberic in order to sort
+  data_frame$number <- as.numeric(data_frame$number)
+  data_frame <- data_frame%>%arrange(number)
+  data_frame <- data_frame%>%mutate(number_2 = number)
+  data_frame$number_2[nchar(data_frame$number_2) == 4] <- 0
+  data_frame$number_2[nchar(data_frame$number_2) == 5] <- 0
+  data_frame$number <- as.integer(data_frame$number)
+  data_frame$number_2 <- as.integer(data_frame$number_2)
+
+  return(data_frame)
+}
+```
+
+```{r echo = FALSE}
+add_day_col <- function(df){
+
+    df$time_point <- as.integer(df$time_point)
+
+    out <- df%>%
+    mutate(day = case_when(
+    (df$time_point < 24)~ "1",
+    (df$time_point >= 24 & df$time_point < 48)~ '2',
+    (df$time_point >= 48 & df$time_point < 72)~ '3',
+    (df$time_point >= 72 & df$time_point < 96)~ '4',
+    (df$time_point >= 96 & df$time_point < 120)~ '5',
+    (df$time_point >= 120 & df$time_point < 144)~ '6',
+    (df$time_point >= 144 & df$time_point < 168)~ '7',
+    (df$time_point >= 168 & df$time_point < 192)~ '8',
+    (df$time_point >= 192 & df$time_point < 216)~ '9',
+    (df$time_point >= 216 & df$time_point < 240)~ '10',
+    (df$time_point >= 240 & df$time_point < 264)~ '11',
+    (df$time_point >= 264 & df$time_point < 288)~ '12',
+    (df$time_point >= 288 & df$time_point < 312)~ '13',
+    (df$time_point >= 312 & df$time_point < 336)~ '14',
+    (df$time_point >= 336 & df$time_point < 360)~ '15',
+    (df$time_point >= 360 & df$time_point < 384)~ '16',
+    (df$time_point >= 384 & df$time_point < 408)~ '17',
+    (df$time_point >= 408 & df$time_point < 432)~ '18',
+    (df$time_point >= 432 & df$time_point < 456)~ '19',
+    (df$time_point >= 456 & df$time_point < 480)~ '20',
+    (df$time_point >= 480 & df$time_point < 504)~ '21',
+    (df$time_point >= 504 & df$time_point < 528)~ '22',
+    (df$time_point >= 528 & df$time_point < 552)~ '23',
+    (df$time_point >= 552 & df$time_point < 576)~ '24',
+    (df$time_point >= 576 & df$time_point < 600)~ '25'
+
+
+    ))
+    
+    out$day <- as.integer(out$day)
+
+    return(out)}
+
+
+```
+
+```{r cell_371_data_function}
+cell_371_data <- function (data_frame) {
+  
+  out <- data_frame%>%
+    #filter(measurement %in% c("npq","phi2"))%>%
+    group_by(day)%>%
+    mutate_each(funs(./median(.[genotype == "Col0"])), net_daily_growth)%>%
+    group_by(day, genotype)%>%
+    mutate(log2_fold = log2(median(net_daily_growth)))
+  
+  #start_mid_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point), ifelse(length(time_point %% 2 == 0), median(time_point[-1]), median(time_point)))))$time_point)
+ # start_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point))))$time_point)
+  
+  # #leaf_area <- data_frame%>%
+  #   filter(measurement == "leafarea")%>%
+  #   filter(time_point %in% start_end)%>%
+  #   group_by(time_point, measurement)%>%
+  #   mutate_each(funs(./median(.[genotype == "Col0"])), diff)%>%
+  #   group_by(time_point, measurement, genotype)%>%
+  #   mutate(log2_fold = log2(median(diff)))
+  # 
+ # out <- rbind(npq_phi2)%>%group_by(genotype, time_point, measurement)
+  
+  return(as.data.frame(out))
+}
+
+```
+
+
+## Load in Data
+
+**For the sake of simplicity, I hid the code that reads in and cleans the data for the December, January, and February experiments. The process is the same as the other analysis.**
+
+This is an investigation into calculating the p-values for leafarea for change in leafarea during each day of the experiment.
+
+
+```{r echo = FALSE}
+###Read in data
+depi_data <-read.table("DEPI_Jan_Seeger_Final.txt", sep = ",", header = FALSE)
+##Add column names
+names(depi_data) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
+###Remove b1b3 and ftsz genotypes and remove border plants
+jan_data <- depi_data%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))
+###Remove border plants
+jan_data <- filter(jan_data, border == FALSE)
+###Rename growth leafarea
+levels(jan_data$measurement)[levels(jan_data$measurement)=="growth"] <- "leafarea"
+###We only want to look at leaf area
+jan_data <- add_day_col(filter(jan_data, measurement == "leafarea"))
+
+
+```
+
+```{r echo = FALSE}
+###Read in data
+temp_depi <- read.csv("DEPI_analysis_Seeger.txt", header = TRUE)
+###Add column names
+names(temp_depi) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+###Filter only mpk genotypes and subline 1 of Col0
+temp_depi <- temp_depi%>%filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0" )|(genotype == "Col0"&subline == "1"))
+###Remove X in front of time points
+temp_depi$time_point <- as.numeric(gsub("X","", temp_depi$time_point))
+###Create subsets for the different experiments
+dec_data <- add_day_col(filter(temp_depi, measurement == "growth", substr(plant_ID, 1,4) == "1217", border == FALSE))
+feb_data <- add_day_col(filter(temp_depi,substr(plant_ID, 1,4) == "0218", border == FALSE, measurement == "size"))
+###Rename growth leafarea
+levels(dec_data$measurement)[levels(dec_data$measurement)=="growth"] <- "leafarea"
+levels(feb_data$measurement)[levels(feb_data$measurement)=="size"] <- "leafarea"
+```
+
+
+I need a solution to the p-values we see for leafarea in the January experiment. Many genotypes are significantly different from Col0, yet we do not see the same pattern in the other experiments. I suspect this is due to differences in starting size.
+
+##Boxplots 
+
+Here is a series of boxplots showing the distribution of plant sizes for each genotype at the start of the experiment. 
+
+**For all plots, the vetical line is the median value of Col0.**
+
+
+```{r }
+###Find median WT value at time 0 - this will be used to add a vertical line to the boxplots
+dec_wt_median <- median(filter(dec_data, genotype == "Col0", time_point == "0")$measured_value)
+jan_wt_median <- median(filter(jan_data, genotype == "Col0", time_point == "0")$measured_value)
+feb_wt_median <- median(filter(feb_data, genotype == "Col0", time_point == "0")$measured_value)
+###Create a data frame with only time point 0 and add columns with number and number_2 that will sort the genotypes
+dec_hist <- add_number(dec_data%>%filter(time_point == "0"))
+jan_hist <- add_number(jan_data%>%filter(time_point == "0"))
+feb_hist <- add_number(feb_data%>%filter(time_point == "0"))
+###Reorder the genotypes 
+    ###I don't know when desc is necessary, but without it the order is in reverse of what I want
+dec_hist$genotype <- reorder(dec_hist$genotype, desc(dec_hist$number))
+jan_hist$genotype <- reorder(jan_hist$genotype, desc(jan_hist$number))
+feb_hist$genotype <- reorder(feb_hist$genotype, desc(feb_hist$number))
+
+ggplot(data = filter(dec_hist, time_point == "0"), aes(x = measured_value, y = genotype))+
+  geom_boxplot()+
+  # theme(axis.title.x=element_blank(),
+  #       axis.text.x=element_blank(),
+  #       axis.ticks.x=element_blank())+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  labs(x = "Plant Size (at Start of Experiment)", title = "December", y = "Genotype")+
+  geom_vline(xintercept = dec_wt_median, color = "red")
+
+ggplot(data = filter(jan_hist,  time_point == "0"), aes( x = measured_value, y = genotype))+
+  geom_boxplot()+
+  # theme(axis.title.x=element_blank(),
+  #       axis.text.x=element_blank(),
+  #       axis.ticks.x=element_blank())+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  labs(x = "Plant Size (at Start of Experiment)", y = "Genotype", title = "January")+
+  geom_vline(xintercept = jan_wt_median, color = "red")
+
+ggplot(data = filter(feb_hist, time_point == "0"), aes(x = measured_value, y = genotype))+
+  geom_boxplot()+
+
+  # theme(axis.title.x=element_blank(),
+  #       axis.text.x=element_blank(),
+  #       axis.ticks.x=element_blank())+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  labs(x = "Plant Size (at Start of Experiment)", title = "February", y = "Genotype")+
+  geom_vline(xintercept = feb_wt_median, color = "red")
+
+```
+
+It is clear that there are issues for January. First, the spread of the data varies substantially between genotypes. For example, the inner-quartile ranges range from around 30 to 150. Also, the median values for the different genotypes range from around 140 to 230. **Finally, the biggest issue is the large amount of outliers that have size near 0.**
+
+But, how does this compare to the other experiments? Do we have the same problems?
+
+For February, note the extremely large spread of size of mpk-6.
+
+It looks like there are some genotypes in the December and February experiments that look different from wildtype at the start of the experiment. (Need to investigate why these p-values aren't turning up as significant...)
+
+But, it looks like January is the worst offender for this. 
+
+### Functions
+
+Here is a function to find median net daily growth for each genotype for each day. And, a function to find the net daily growth per invididual plant for each day. This second function will be used to find p-values comparing each genotype to wildtype. 
+
+```{r}
+find_median_net_daily_growth <- function(df){out <- df%>%
+  mutate(day = case_when(
+    (time_point < 24)~ '1',
+    (time_point >= 24 & time_point < 48)~ '2',
+    (time_point >= 48 & time_point < 72)~ '3',
+    (time_point >= 72 & time_point < 96)~ '4',
+    (time_point >= 96 & time_point < 120)~ '5',
+    (time_point >= 120 & time_point < 144)~ '6',
+    (time_point >= 144 & time_point < 168)~ '7',
+    (time_point >= 168 & time_point < 192)~ '8',
+    (time_point >= 192 & time_point < 216)~ '9',
+    (time_point >= 216 & time_point < 240)~ '10',
+    (time_point >= 240 & time_point < 264)~ '11',
+    (time_point >= 264 & time_point < 288)~ '12',
+    (time_point >= 288 & time_point < 312)~ '13',
+    (time_point >= 312 & time_point < 336)~ '14',
+    (time_point >= 336 & time_point < 360)~ '15'
+    ))%>%
+  group_by(day)%>%
+  filter(time_point %in% c(min(time_point), max(time_point)))%>%
+  group_by(day, genotype, plant_ID)%>%
+  select(genotype, plant_ID, day, time_point, measured_value)%>%
+  mutate(net_daily_growth = measured_value - first(measured_value))%>%
+  filter(net_daily_growth != 0)%>%
+  select(genotype, plant_ID, day, time_point, net_daily_growth)%>%
+  arrange(genotype, day)%>%
+  group_by(genotype, day)%>%
+  summarize(median_net_daily_growth = median(net_daily_growth))%>%
+  arrange(genotype, as.integer(day))
+
+return(out)
+}
+
+median_net_growth_all <- function(df){out <- df%>%
+  mutate(day = case_when(
+    (time_point < 24)~ '1',
+    (time_point >= 24 & time_point < 48)~ '2',
+    (time_point >= 48 & time_point < 72)~ '3',
+    (time_point >= 72 & time_point < 96)~ '4',
+    (time_point >= 96 & time_point < 120)~ '5',
+    (time_point >= 120 & time_point < 144)~ '6',
+    (time_point >= 144 & time_point < 168)~ '7',
+    (time_point >= 168 & time_point < 192)~ '8',
+    (time_point >= 192 & time_point < 216)~ '9',
+    (time_point >= 216 & time_point < 240)~ '10',
+    (time_point >= 240 & time_point < 264)~ '11',
+    (time_point >= 264 & time_point < 288)~ '12',
+    (time_point >= 288 & time_point < 312)~ '13',
+    (time_point >= 312 & time_point < 336)~ '14',
+    (time_point >= 336 & time_point < 360)~ '15'
+    ))%>%
+  group_by(day)%>%
+  filter(time_point %in% c(min(time_point), max(time_point)))%>%
+  group_by(day, genotype, plant_ID)%>%
+  select(genotype, plant_ID, day, time_point, measured_value)%>%
+  mutate(net_daily_growth = measured_value - first(measured_value))%>%
+  mutate(start = first(measured_value), end = measured_value)%>%
+  filter(net_daily_growth != 0)%>%
+  select(genotype, plant_ID, day, net_daily_growth, start, end)%>%
+  arrange(genotype, as.integer(day))
+
+return(out)
+}
+
+```
+
+Apply functions to each experiment. 
+```{r}
+jan_diff_all <- median_net_growth_all(jan_data)
+dec_diff_all <- median_net_growth_all(dec_data)
+feb_diff_all <- median_net_growth_all(feb_data)
+###Make day an integer so the legend in the plots sorts correctly
+jan_diff_all$day <- as.integer(jan_diff_all$day)
+dec_diff_all$day <- as.integer(dec_diff_all$day)
+feb_diff_all$day <- as.integer(feb_diff_all$day)
+
+dec_diff_all
+jan_diff_all
+feb_diff_all
+###Add bins so the heat maps are easy to interpret
+jan_diff_med <- find_median_net_daily_growth(jan_data)%>%
+  mutate(bin = case_when (
+    (median_net_daily_growth < 0)~ "Negative",
+    (median_net_daily_growth >= 0 & median_net_daily_growth < 20)~ 'Between 0 and 20',
+    (median_net_daily_growth >= 20 & median_net_daily_growth < 40)~ 'Between 20 and 40',
+    (median_net_daily_growth >= 40 & median_net_daily_growth < 60)~ 'Between 40 and 60',
+    (median_net_daily_growth >= 60 & median_net_daily_growth < 80)~ 'Between 60 and 80',
+    (median_net_daily_growth >= 80 & median_net_daily_growth < 100)~ 'Between 80 and 100'
+    
+  ))
+dec_diff_med <- find_median_net_daily_growth(dec_data)%>%
+  mutate(bin = case_when (
+    (median_net_daily_growth < 0)~ "Negative",
+    (median_net_daily_growth >= 0 & median_net_daily_growth < 20)~ 'Between 0 and 20',
+    (median_net_daily_growth >= 20 & median_net_daily_growth < 40)~ 'Between 20 and 40',
+    (median_net_daily_growth >= 40 & median_net_daily_growth < 60)~ 'Between 40 and 60'
+    
+  ))
+feb_diff_med <- find_median_net_daily_growth(feb_data)%>%
+  mutate(bin = case_when (
+    (median_net_daily_growth < 0)~ "Negative",
+    (median_net_daily_growth >= 0 & median_net_daily_growth < 20)~ 'Between 0 and 20',
+    (median_net_daily_growth >= 20 & median_net_daily_growth < 40)~ 'Between 20 and 40',
+    (median_net_daily_growth >= 40 & median_net_daily_growth < 60)~ 'Between 40 and 60',
+    (median_net_daily_growth >= 60 & median_net_daily_growth < 80)~ 'Between 60 and 80',
+    (median_net_daily_growth >= 80 & median_net_daily_growth < 100)~ 'Between 80 and 100', 
+    (median_net_daily_growth >= 100 & median_net_daily_growth < 120)~ 'Between 80 and 100'
+    
+  ))
+###Make day an integer so the plots sort correctly
+dec_diff_med$day <- as.integer(dec_diff_med$day)
+jan_diff_med$day <- as.integer(jan_diff_med$day)
+feb_diff_med$day <- as.integer(feb_diff_med$day)
+###Include columns with number and number_2 so the genotypes are lists single mutant first, then double mutants
+jan_diff_med <- add_number(as.data.frame(jan_diff_med))
+feb_diff_med <- add_number(as.data.frame(feb_diff_med))
+dec_diff_med <- add_number(as.data.frame(dec_diff_med))
+###Reorder genotypes based on number column
+jan_diff_med$genotype <- reorder(jan_diff_med$genotype, jan_diff_med$number)
+feb_diff_med$genotype <- reorder(feb_diff_med$genotype, feb_diff_med$number)
+dec_diff_med$genotype <- reorder(dec_diff_med$genotype, dec_diff_med$number)
+
+```
+
+###Distribution of net daily growth
+
+Here are the plots of the net daily growth for individual plants. The fill is the day of the experiment. This figure doesn't have information on which genotype is corresponding the the values in the plot, but it still gives us an idea of the general trend for each day. 
+
+```{r include = FALSE}
+ggplot(data = jan_diff_all, aes(x = net_daily_growth, fill = factor(day)))+
+  geom_histogram()+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  labs(title = "Change in Leaf Area per Day for January")
+
+ggplot(data = feb_diff_all, aes(x = net_daily_growth))+
+  geom_histogram(aes(fill = factor(day)))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  labs(title = "Change in Leaf Area per Day for February")
+
+ggplot(data = dec_diff_all, aes(x = net_daily_growth))+
+  geom_histogram(aes(fill = factor(day)))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  labs(title = "Change in Leaf Area per Day for December")
+```
+
+###Heat maps
+
+```{r}
+##### ----- Median Net Daily Growth January ------
+ggplot(data = jan_diff_med, aes(x = day, y = genotype, fill = bin)) + 
+  labs(fill = "Median Net Daily Growth", x = "Hours", y = NULL, title = "January: Median Net Daily Growth")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_color_viridis(discrete = TRUE, option = "magma")+
+  scale_fill_viridis(discrete = TRUE) 
+##### ----- Median Net Daily Growth December ------
+ggplot(data = dec_diff_med, aes(x = day, y = genotype, fill = bin)) + 
+  labs(fill = "Median Net Daily Growth", x = "Hours", y = NULL, title = "December: Median Net Daily Growth")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_color_viridis(discrete = TRUE, option = "magma")+
+  scale_fill_viridis(discrete = TRUE) 
+##### ----- Median Net Daily Growth February ------
+ggplot(data = feb_diff_med, aes(x = day, y = genotype, fill = bin)) + 
+  labs(fill = "Median Net Daily Growth", x = "Hours", y = NULL, title = "February: Median Net Daily Growth")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_color_viridis(discrete = TRUE, option = "magma")+
+  scale_fill_viridis(discrete = TRUE) 
+```
+
+
+
+Now, I want to see if the differences are significantly different for each day and genotype when comparing to wildtype.
+
+**Is there a significant difference in net daily growth between each genotype and wild type?**
+
+I will use the same functions in used in the general analysis to find p-value, and to adjust the p-value.
+
+```{r p_value, echo = FALSE}
+p_value <- function (data_frame){
+  ###Initialize an empty data frame
+  out = data.frame()
+  ###For each genotype:
+  for (i in unique(filter(data_frame, genotype != "Col0")$genotype)){
+    ###We don't want to make comparisons of WT to itself - this could impact FDR correction
+    indiv_data <- data_frame%>% 
+      ###Focus on each time point and measurement
+      group_by(day)%>%
+      ###Create a column with the number of WT individual plants and the number of plants for each genotype
+      ###Use this later to calculate effect size
+      mutate(n_genotype = length(net_daily_growth[genotype == i]), n_wt = length(net_daily_growth[genotype =="Col0"]))%>%
+      ###Create a column of p-values using a nonparametric Wilcox test
+      
+      ###Default set to exact = TRUE, because our sample sizes are too small to use a normal approximation
+      ###But, when there are ties in the values (i.e. one value appears twice in the ranking process), wilcox.test returns to the normal approximation and spits out a warning message
+      ###This may be a problem - include correct = FALSE to stop this from happening 
+
+      
+      ###Paired = FALSE, because the Col0 plants are independet from each genotype
+      ###Correct = FALSE turns off the continuity correction
+      mutate(p = (wilcox.test(net_daily_growth[genotype == i], net_daily_growth[genotype == "Col0"], correct = FALSE, paired = FALSE))$p.value)%>%
+  
+      ###Add a column with each genotype
+      mutate(genotype = i)%>%
+      # mutate(number = unique(filter(feb_data, genotype == i)$number))%>%
+      # mutate(number_2 = unique(filter(feb_data, genotype == i)$number_2))%>%
+      # 
+      select(genotype, day, p, n_wt, n_genotype)
+  
+      
+    ###Add individual information to the main data frame
+    out <- rbind(as.data.frame(indiv_data), out)}
+  return(out)}
+```
+
+
+
+```{r corrected_p_value, echo = FALSE}
+corrected_p_value <- function(data_frame){
+  out <- data_frame%>%
+  ###For some reason, I have multiple copies of each row
+  distinct()%>%
+  ###Group by time point and measurement - we are correcting by the number of genotypes 
+  group_by(day)%>%
+  mutate(p_adj = p.adjust(p, method = "fdr"))
+  ###Gather the data to make it easier to plot according to whether p was adjusted
+  out <- gather(out, type, p, p, p_adj)%>%arrange(genotype, day)
+  return(out) 
+}
+
+```
+
+```{r warning = FALSE}
+dec_diff_p <- p_value(dec_diff_all)
+dec_diff_p_adj <- corrected_p_value(dec_diff_p)
+
+jan_diff_p <- p_value(jan_diff_all)
+jan_diff_p_adj <- corrected_p_value(jan_diff_p)
+
+feb_diff_p <- p_value(feb_diff_all)
+feb_diff_p_adj <- corrected_p_value(feb_diff_p)
+```
+
+Here, pick a few random days and genotypes to confirm that the pipeline to find p-values is correct for the January experiment. 
+
+```{r warning = FALSE}
+###Test 1 
+unique(filter(jan_diff_p, genotype == "mpk1", day == "1")$p)
+a <- filter(jan_diff_all, genotype == "mpk1", day == "1")$net_daily_growth
+b <- filter(jan_diff_all, genotype == "Col0", day == "1")$net_daily_growth
+wilcox.test(a, b, correct = FALSE)$p.value
+
+###Test 2
+unique(filter(jan_diff_p, genotype == "mpk14-17", day == "7")$p)
+c <- filter(jan_diff_all, genotype == "mpk14-17", day == "7")$net_daily_growth
+d <- filter(jan_diff_all, genotype == "Col0", day == "7")$net_daily_growth
+wilcox.test(c,d, correct = FALSE)$p.value
+
+```
+
+##December P-Values
+```{r}
+summary(filter(dec_diff_p_adj, type == "p_adj")$p)
+```
+
+No significant p-values. 
+
+##January P-Values
+```{r}
+summary(filter(jan_diff_p_adj, type == "p_adj")$p)
+```
+
+There are no adjusted p-values that suggest any genotype is significantly different from Col0 when we look at the difference in size for the January experiment. 
+
+
+##February P-Values
+```{r}
+summary(filter(feb_diff_p_adj, type == "p_adj")$p)
+```
+
+```{r}
+filter(feb_diff_p_adj, type == "p_adj", p < 0.05)
+```
+
+**So, there are significant differences in the Februrary experiment! All for day 5. Why do we see significant differences in February but not the other experiments?**
+
+**But, by just looking at the start and end of each day, we might be missing any significant differences that occur in the middle! Especially for days with flucuating or sinusoidal light.**
+
+# Time Series Plots
+
+Here, I find the difference in measured values between each genotype and Col0 for each day. I take the median net daily growth for each genotype and subtract the median net daily growth for Col0.
+
+So, positive values indicate that the gentype has a higher measured value that wild type. But, a negative measured value means that the wild type value is higher. 
+
+
+# Here is a function to compare each time point to the wild type measured value for each measurement and time point and genotype. 
+
+```{r}
+each_tp_function <- function(data_frame){
+  out <- data_frame%>%
+  group_by(genotype, time_point)%>%
+  mutate(a = median(measured_value))%>%
+  ungroup()%>%
+  group_by(time_point)%>%
+  mutate(b = median(measured_value[genotype == "Col0"]))%>%
+  mutate(g_minus_wt = a-b)%>%
+  select(measurement, genotype, time_point, day, g_minus_wt)%>%
+  distinct()
+  return(out)}
+
+
+```
+
+```{r}
+jan_diff_day <- each_tp_function(jan_data)
+feb_diff_day <- each_tp_function(feb_data)
+dec_diff_day <- each_tp_function(dec_data)
+
+###Test 1
+filter(jan_diff_day, genotype == "mpk1", time_point == unique(jan_diff_day$time_point)[25])$g_minus_wt
+a <- median(filter(jan_data, genotype =="mpk1", time_point == unique(jan_data$time_point)[25])$measured_value)
+b <- median(filter(jan_data, genotype =="Col0", time_point == unique(jan_data$time_point)[25])$measured_value)
+a-b
+
+###Test 2
+filter(jan_diff_day, genotype == "mpk1", time_point == unique(jan_diff_day$time_point)[101])$g_minus_wt
+c <- median(filter(jan_data, genotype =="mpk1", time_point == unique(jan_data$time_point)[101])$measured_value)
+d <- median(filter(jan_data, genotype =="Col0", time_point == unique(jan_data$time_point)[101])$measured_value)
+c-d
+
+###Test 3
+filter(jan_diff_day, genotype == "Col0", time_point == unique(jan_diff_day$time_point)[77])$g_minus_wt
+e <- median(filter(jan_data, genotype =="Col0", time_point == unique(jan_data$time_point)[77])$measured_value)
+f <- median(filter(jan_data, genotype =="Col0", time_point == unique(jan_data$time_point)[77])$measured_value)
+e-f
+
+###The 0 here makes sense - we should expect a difference of 0 between Col0 and itself
+
+###Test 4
+filter(jan_diff_day, genotype == "mpk5-17", time_point == unique(jan_diff_day$time_point)[25])$g_minus_wt
+g <- median(filter(jan_data, genotype =="mpk5-17", time_point == unique(jan_data$time_point)[25])$measured_value)
+h <- median(filter(jan_data, genotype =="Col0", time_point == unique(jan_data$time_point)[25])$measured_value)
+g-h
+
+```
+
+What am I trying to do?
+
+This function does something similar to the log2 fold calculations in the general analysis.
+
+But, instead of using measured_value, I am using the net growth (net change in plant size) over the course of the day.
+
+So, negative log 2 fold values mean that that specific genotype saw less of an increase than Col0.
+
+But, a positive log 2 fold value means that that specific genotype saw a greater increase than Col0.
+
+
+
+```{r}
+jan_test <- add_number(cell_371_data(jan_diff_all)%>%select(genotype, day, log2_fold)%>%distinct())
+
+jan_test$genotype <- reorder(jan_test$genotype, jan_test$number)
+
+head(jan_test)
+```
+
+
+```{r}
+###Address inf values
+jan_test$log2_fold[is.infinite(jan_test$log2_fold)]<-NaN
+sum(is.nan(jan_test$log2_fold))
+
+```
+
+```{r}
+summary(jan_test$log2_fold)
+```
+
+Here, I run into a problem. On some days for some genotypes, the plant size actually descreases. So, we get NaN when we try to take the log2 fold value of this negative number.
+
+How would this number be negative? When the numerator and denominator have opposite signs - in other words, wild type would have positive net growth while the genotype would have negative net growth (or vice versa).
+
+```{r}
+ggplot(data = jan_test, aes(x = day, y = genotype, fill = log2_fold)) + 
+  labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "Jan Test - Log 2 Fold Change of Net Daily Growth")+
+  geom_tile(width = 10, height = 10)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  theme_tufte(base_family = "Calibri",
+               base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-4, 2.25), breaks = c(-4, 0, 2.25), labels = c("-4", "0", "2.25"))
+
+```
+
+
+Another way of looking at it: what if we take all plant size measurements and subtract the starting size for each plant?
+
+```{r}
+test <- jan_data%>%
+  group_by(plant_ID)%>%
+  mutate(adj = measured_value - measured_value[time_point == 0])
+
+test <- add_number(test)
+
+test$genotype <- reorder(test$genotype, test$number)
+
+
+summary(test$adj)
+hist(test$adj)
+```
+
+Okay, so it looks like some plants shrunk considerably (not sure how this happened...).
+
+
+```{r}
+ggplot(data = test, aes(x = day, y = genotype, fill = adj)) + 
+  labs(fill = "Plant Size - Plant Size at Time 0", x = "Hours", y = NULL, title = "Jan Test - Log 2 Fold Change of Net Daily Growth")+
+  geom_tile(width = 10, height = 10)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  theme_tufte(base_family = "Calibri",
+               base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))
+  # scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-4, 2.25), breaks = c(-4, 0, 2.25), labels = c("-4", "0", "2.25"))
+```
+
+## Probems
+
+Some net daily growth values are negative.
+
+This doesn't make sense - we don't expect a plant to get smaller.
+
+One possible reason for this is plant movement during the experiment; a camera that captures these movements might percieve the plant as being smaller when really the leaves are curling.
+
+Here are all the rows for each respective experiment that have negative net daily growth for each individual plant:
+
+```{r}
+###Rows that contain a negative net daily growth for individual plants
+filter(jan_diff_all, net_daily_growth < 0)
+filter(feb_diff_all, net_daily_growth < 0)
+filter(dec_diff_all, net_daily_growth < 0)
+###Summary statistics for the negative net daily growth values
+summary(filter(jan_diff_all, net_daily_growth < 0)$net_daily_growth)
+summary(filter(feb_diff_all, net_daily_growth < 0)$net_daily_growth)
+summary(filter(dec_diff_all, net_daily_growth < 0)$net_daily_growth)
+###Proportion of rows that have negative net daily growth values
+nrow(filter(jan_diff_all, net_daily_growth < 0))/nrow(jan_diff_all)
+nrow(filter(feb_diff_all, net_daily_growth < 0))/nrow(feb_diff_all)
+nrow(filter(dec_diff_all, net_daily_growth < 0))/nrow(dec_diff_all)
+
+
+```

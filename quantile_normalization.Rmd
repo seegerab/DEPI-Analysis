@@ -158,6 +158,8 @@ dec_data$measured_value[dec_data$measurement == "phi2"] <- (dec_data$measured_va
 
 ```
 
+
+
 Finally, merge these three experiments to create one data frame.
 
 ```{r}
@@ -169,6 +171,12 @@ depi_all <- rbind(dec_data, jan_data, feb_data)%>%
 depi_all <- as.data.frame(depi_all%>%
     filter(time_point <= min(c(max(jan_data$time_point), max(dec_data$time_point), max(feb_data$time_point)))))
 
+```
+
+
+```{r}
+depi_all$measurement[depi_all$measurement == "size"] <- "leafarea"
+depi_all$measurement[depi_all$measurement == "growth"] <- "leafarea"
 ```
 
 # Investigate Quantile Normalization
@@ -234,7 +242,9 @@ filter(test_normalization, month == "Jan")$scaled
 plot(density(filter(test_normalization, month == "Dec")$scaled), xlim = c(-1, 2), ylim = c(0,2), main = "Time Point 0 - NPQ - Col0 - Min-Max Normalization")
 lines(density(filter(test_normalization, month == "Jan")$scaled), col = "blue")
 lines(density(filter(test_normalization, month == "Feb")$scaled), col = "red")
-legend(.35, 14, legend=c("December", "January", "February"),
+legend(.35, 16, legend=c("December", "January", "February"),
+       col=c("black", "blue", "red"), lty=1)
+legend(-1, 2, legend=c("December", "January", "February"),
        col=c("black", "blue", "red"), lty=1)
 
 ```
@@ -252,3 +262,528 @@ summary(filter(test_normalization, month == "Feb")$scaled)
 ```
 
 So, we have the range that we want, but the quantiles are still variant between experiments. 
+
+But, at least I have an idea of how to use dplyr to do min-max normalization!!
+
+Here's a pipeline that will apply this to the entire dataset, if we chose to use this method:
+
+```{r}
+test_normalization <- depi_all%>%
+  group_by(genotype, measurement, time_point, month)%>%
+  mutate(min = min(measured_value), max = max(measured_value))%>%
+  mutate(scaled = (measured_value - min)/(max - min))
+
+```
+
+Let's verify that this:
+
+```{r}
+###Test 1
+a <- filter(test_normalization, genotype == "mpk1", time_point == "1", measurement == "npq", month =="Dec")$measured_value
+
+(a - min(a))/(max(a) - min(a))
+
+verify_a <- filter(test_normalization, genotype == "mpk1", time_point == "1", measurement == "npq", month =="Dec")$scaled
+
+verify_a
+
+###Test 2
+b <- filter(test_normalization, genotype == "Col0", time_point == "0", measurement == "phi2", month =="Feb")$measured_value
+
+(b - min(b))/(max(b) - min(b))
+
+verify_b <- filter(test_normalization, genotype == "Col0", time_point == "0", measurement == "phi2", month =="Feb")$scaled
+
+verify_b
+```
+
+
+## Notes from Friday, 7/31 Meeting
+
+Now, I change approach after meeting with Shinhan and Melissa.
+
+
+
+![A schematic of how Shinhan proposed I tackle this.](/Users/Joan Seeger/Documents/Research/Shiu_Lab/Shiu_Lab_R/quantile_schematic.png)
+
+
+General approach:
+
+1. Normalization done at the per flat level, for each type of measurement. But, include all time points and all genotypes.
+	
+OR
+
+2. Normalization done on the level of experiment. 
+	
+Then, always do:
+
+3. Normalize against the WT on that flat. Once we compare before and after the quantile normalization - variance should be smaller after quantile. (Divide each measured value by the median measured value of Col0 on the same flat.)
+
+**The goal is to use the approach that minimizes the variance.**
+
+When doing this, group all of the plants on the flat together, regardless of their genotype.
+
+There will be two different levels of normalization - first level, normalize between three sets of data - December, January, and February. Then, normalize at the unit of a flat.
+
+To start, try normalize.quantiles.
+
+I should have a variance for each genotype. And, then I can draw the distributions. 
+
+
+ANOTHER CRAZY IDEA:
+
+Essentially, the trait value = g + g x flat + g x season + flat x season + g x f x s
+
+This linear regression is used to estimate genotype effect. We will do this for each genotype - anticipate intercept to be 0. We will build a different model for each time point for each trait.
+
+Note that this model may have a problem  - flat is nested in season.
+
+```{r}
+plot_data_dec <- depi_all%>%filter(month =="Dec")
+plot_data_jan <- depi_all%>%filter(month =="Jan")
+plot_data_feb <- depi_all%>%filter(month =="Feb")
+
+ggplot(data = plot_data_dec, aes( x = measured_value))+
+  geom_histogram()+
+  facet_wrap(flat_number~measurement, scales = "free_x", ncol = 3)+
+  labs(x = "Measured Value", y = "Frequency", title = "December - Distribution of Measured Values by Flat")+
+  theme_calc()
+
+ggplot(data = plot_data_jan, aes( x = measured_value))+
+  geom_histogram()+
+  facet_wrap(flat_number~measurement, scales = "free_x", ncol = 3)+
+  labs(x = "Measured Value", y = "Frequency", title = "January - Distribution of Measured Values by Flat")+
+  theme_calc()
+
+ggplot(data = plot_data_feb, aes( x = measured_value))+
+  geom_histogram()+
+  facet_wrap(flat_number~measurement, scales = "free_x", ncol = 3)+
+  labs(x = "Measured Value", y = "Frequency", title = "February - Distribution of Measured Values by Flat")+
+  theme_calc()
+```
+
+
+So, the goal is to get each column to have the same distribution. Or, I want the same distribution for each flat and measurement in each experiment.
+
+## normalize.quantiles()
+
+Here, load the necessary package and have a short example to see what's actually happening with normalize.quantiles. 
+
+```{r}
+library(preprocessCore)
+#the function expects a matrix
+#create a matrix using the same example
+mat <- matrix(c(5,2,3,4,4,1,4,2,3,4,6,8),
+             ncol=3)
+mat
+normalize.quantiles(mat)
+```
+
+```{r}
+summary(mat)
+summary(normalize.quantiles(mat))
+```
+
+
+```{r}
+#Function to add vector as column
+addToDF <- function(df, v){
+ nRow <- nrow(df)
+ lngth <- length(v)
+ if(nRow > lngth){
+   length(v) <- nRow
+ }else if(nRow < lngth){
+   df[(nRow+1):lngth, ] <- NA
+ }
+ cbind(df,v)
+}
+```
+
+So, a summary of the normalize.quantile data returns identical summary statistics for each column. 
+
+Now, apply this function to each experiment to normalize between flats. Use December and NPQ as an example.
+
+```{r}
+temp_flat1 <- filter(depi_all, month == "Dec", measurement =="npq", flat_number == "1")$measured_value
+temp_flat2 <- filter(depi_all, month == "Dec", measurement =="npq", flat_number == "2")$measured_value
+temp_flat3 <- filter(depi_all, month == "Dec", measurement =="npq", flat_number == "3")$measured_value
+temp_flat4 <- filter(depi_all, month == "Dec", measurement =="npq", flat_number == "4")$measured_value
+
+count <- 1:max(c(length(temp_flat1), length(temp_flat2), length(temp_flat3), length(temp_flat4)))
+
+test <- as.matrix(cbind(temp_flat1, temp_flat2, temp_flat3, temp_flat4, count))
+
+test_normalize <- normalize.quantiles(test[,1:4])
+
+summary(test)
+summary(test_normalize)
+```
+
+Okay - this does what I want it to! The summary for each column after normalization are essentially identical. But, I need to make sure that I don't mix up what measurement or experiment the data is from - the matrix just has measured values, and no other identifying information.
+
+Here is a loop that accomplishes this for all measurements and experiments:
+
+```{r}
+###Create a loop for each measurement and experiment
+for (i in c("npq", "phi2", "leafarea")){
+  for (j in c("Dec", "Jan", "Feb")){
+    ###Filter to select each specific month and measured value
+    temp_vector <- filter(depi_all, month == j, measurement == i)
+    ###Initialize an empty data frame
+    temp_df <- data.frame()
+    ###Loop through each flat 
+    for (k in 1:length(unique(temp_vector$flat_number))){
+      ###Create a temporary data frame - each column is the measured values for each flat
+      temp <- filter(temp_vector, flat_number == k)$measured_value
+      temp_df <- addToDF(temp_df, temp)}
+
+    ###Normalize across the flats
+    temp_normalize <- as.data.frame(normalize.quantiles(as.matrix(temp_df)))%>%
+      ###Add columns with the measurement and experiment to be certain there hasn't been any mix-ups
+      mutate(measurement = i, experiment= j)
+    ###Create a name to give the normalized data based on the measurement and experiment
+    temp_name <- paste(tolower(j), "_", i, "_normalize", sep = "")
+    ###Rename the columns
+    if(ncol(temp_normalize) == 6){
+      temp_normalize <- temp_normalize%>%
+        rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4)
+    }else{
+      temp_normalize <- temp_normalize%>%
+      rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4, flat_5 = 5)}
+    ###Assign the name to the data frame
+    assign(temp_name, temp_normalize)
+  }
+}
+
+```
+
+## Summary - Normalized by Flat
+
+Here are the summary statistics for each month and measured value. Note that the summary statistics for each column - each column represents a flat - are essentially identical. 
+
+```{r}
+summary(dec_leafarea_normalize)
+summary(jan_leafarea_normalize)
+summary(feb_leafarea_normalize)
+
+summary(dec_phi2_normalize)
+summary(jan_phi2_normalize)
+summary(feb_phi2_normalize)
+
+summary(dec_npq_normalize)
+summary(jan_npq_normalize)
+summary(feb_npq_normalize)
+```
+
+**I see a potential issue! Check to make sure that these NA values make sense.**
+
+I expect that the flat with the most measured values will have 0 NA values. I expect that flats with less measured values will fill in the gaps with NA. 
+
+Verify that this is the case:
+
+```{r}
+depi_all%>%
+  group_by(month, measurement, flat_number)%>%
+  summarize(num_measured_values = length(measured_value))%>%
+  ungroup()%>%
+  group_by(month, measurement)%>%
+  mutate(expected_NA = num_measured_values - min(num_measured_values))%>%
+  print(n = Inf)
+  
+```
+
+
+## Density - Comparing Normalized Data to Each Flat 
+
+I only show the code to create the first plot. This is the same code used to create the other plots, with just the month and measurement changed. 
+
+```{r}
+plot(density(dec_npq_normalize$flat_1, na.rm = TRUE), main = "December NPQ - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Dec", measurement == "npq", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Dec", measurement == "npq", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Dec", measurement == "npq", flat_number == "3")$measured_value), col = "yellow")
+lines(density(filter(depi_all, month == "Dec", measurement == "npq", flat_number == "4")$measured_value), col = "green")
+legend(2.2,1.3, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4"),
+       col=c("black", "blue", "red", "orange", "green"), lty=1)
+```
+```{r echo = FALSE}
+plot(density(jan_npq_normalize$flat_1, na.rm = TRUE), main = "January NPQ - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Jan", measurement == "npq", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Jan", measurement == "npq", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Jan", measurement == "npq", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Jan", measurement == "npq", flat_number == "4")$measured_value), col = "green")
+legend(2,1, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4"),
+       col=c("black", "blue", "red", "orange", "green"), lty=1)
+```
+```{r echo = FALSE}
+plot(density(feb_npq_normalize$flat_1, na.rm = TRUE), main = "February NPQ - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Feb", measurement == "npq", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Feb", measurement == "npq", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Feb", measurement == "npq", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Feb", measurement == "npq", flat_number == "4")$measured_value), col = "green")
+lines(density(filter(depi_all, month == "Feb", measurement == "npq", flat_number == "5")$measured_value), col = "purple")
+legend(2,1, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4", "Flat 5"),
+       col=c("black", "blue", "red", "orange", "green", "purple"), lty=1)
+```
+
+
+```{r echo = FALSE}
+plot(density(feb_phi2_normalize$flat_1, na.rm = TRUE), main = "February Phi2 - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Feb", measurement == "phi2", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Feb", measurement == "phi2", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Feb", measurement == "phi2", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Feb", measurement == "phi2", flat_number == "4")$measured_value), col = "green")
+lines(density(filter(depi_all, month == "Feb", measurement == "phi2", flat_number == "5")$measured_value), col = "purple")
+legend(.08,5, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4", "Flat 5"),
+       col=c("black", "blue", "red", "orange", "green", "purple"), lty=1)
+```
+
+```{r echo = FALSE}
+plot(density(jan_phi2_normalize$flat_1, na.rm = TRUE), main = "January Phi2 - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Jan", measurement == "phi2", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Jan", measurement == "phi2", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Jan", measurement == "phi2", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Jan", measurement == "phi2", flat_number == "4")$measured_value), col = "green")
+legend(.08,6, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4"),
+       col=c("black", "blue", "red", "orange", "green"), lty=1)
+```
+
+```{r echo = FALSE}
+plot(density(dec_phi2_normalize$flat_1, na.rm = TRUE), main = "December Phi2 - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Dec", measurement == "phi2", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Dec", measurement == "phi2", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Dec", measurement == "phi2", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Dec", measurement == "phi2", flat_number == "4")$measured_value), col = "green")
+legend(.1, 5, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4"),
+       col=c("black", "blue", "red", "orange", "green"), lty=1)
+```
+
+```{r echo = FALSE}
+plot(density(dec_leafarea_normalize$flat_1, na.rm = TRUE), main = "December Leafarea - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Dec", measurement == "leafarea", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Dec", measurement == "leafarea", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Dec", measurement == "leafarea", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Dec", measurement == "leafarea", flat_number == "4")$measured_value), col = "green")
+legend(450, .0045, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4"),
+       col=c("black", "blue", "red", "orange", "green"), lty=1)
+```
+
+```{r echo = FALSE}
+plot(density(jan_leafarea_normalize$flat_1, na.rm = TRUE), main = "January Leafarea - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Jan", measurement == "leafarea", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Jan", measurement == "leafarea", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Jan", measurement == "leafarea", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Jan", measurement == "leafarea", flat_number == "4")$measured_value), col = "green")
+legend(500, .0035, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4"),
+       col=c("black", "blue", "red", "orange", "green"), lty=1)
+```
+
+```{r echo = FALSE}
+plot(density(feb_leafarea_normalize$flat_1, na.rm = TRUE), main = "February Leafarea - Normalized Against Flats")
+lines(density(filter(depi_all, month == "Feb", measurement == "leafarea", flat_number == "1")$measured_value), col = "blue")
+lines(density(filter(depi_all, month == "Feb", measurement == "leafarea", flat_number == "2")$measured_value), col = "red")
+lines(density(filter(depi_all, month == "Feb", measurement == "leafarea", flat_number == "3")$measured_value), col = "orange")
+lines(density(filter(depi_all, month == "Feb", measurement == "leafarea", flat_number == "4")$measured_value), col = "green")
+lines(density(filter(depi_all, month == "Feb", measurement == "leafarea", flat_number == "5")$measured_value), col = "purple")
+legend(700, .003, legend=c("All Flats - Normalized",  "Flat 1", "Flat 2", "Flat 3", "Flat 4", "Flat 5"),
+       col=c("black", "blue", "red", "orange", "green", "purple"), lty=1)
+```
+
+
+## Investigate - How to go from normalized data back to data frame?
+
+Now, I have a problem. I still want to associate each measured value with a time point and genotype. But, the matrix data type can only hold integer values. So, is there a way to move backwards from the quantile normalized matrix to the data frame with all plant ID information?
+
+Some clues: 
+
+An example:
+
+```{r}
+library(preprocessCore)
+#the function expects a matrix
+#create a matrix using the same example
+mat <- matrix(c(5,2,3,4,4,1,4,2,3,4,6,8),
+             ncol=3)
+mat
+norm_mat <- normalize.quantiles(mat)
+norm_mat
+```
+
+So, it appears that the order of the values is maintained in normalize.quantiles. 
+
+For example, the third column is increasing as the rows increase for both the original and normalized matrix.
+
+```{r}
+invest <- cbind(as.data.frame(mat), as.data.frame(norm_mat))
+colnames(invest) <- c("Original_1", "Original_2", "Original_3", "Normalized_1", "Normalized_2", "Normalized_3")
+
+invest
+```
+
+So, in this case, I would replace the original columns with the normalized columns. The order would be the same.
+
+```{r}
+invest%>%
+  arrange(Original_1)
+```
+
+So, the order of Original_1 is always the same as the order of Normalized_1.
+
+```{r}
+temp_test <- depi_all%>%
+  filter(measurement == "npq", month == "Jan", flat_number == "1")%>%
+  select(measurement, month, flat_number, measured_value, individual_plant_metadata )
+
+temp_test <- cbind(temp_test, na.omit(jan_npq_normalize$flat_1))
+
+
+colnames(temp_test)[6] <- "normalized_values"
+
+head(temp_test)
+```
+
+Okay - so how do I even know if this is matched correctly??? Well, if I sort the measured_value column, the normalized_values column should automatically be sorted too!!
+
+```{r}
+plot_data <- temp_test%>%
+  arrange(measured_value)%>%
+  mutate(count = 1:nrow(temp_test))%>%
+  gather(type, value, measured_value:normalized_values, factor_key = TRUE)%>%
+  arrange(count)%>%
+  filter(type != "individual_plant_metadata")
+
+ggplot(data = plot_data, aes(x = count, y = value))+
+  geom_line(aes(color = type))+
+  theme(axis.text.y=element_blank(),axis.ticks=element_blank())+
+  labs(x = "Order", y = "Measured Value")
+```
+
+Here, I modify my existing code to include a column with the quantile normalized values in the depi data. This allows each quantile normalized value to still be associated all information in the rows of the depi data.
+
+But, I still need to verify that this is actually associating each quantile normalized value with the correct measured value.
+
+```{r}
+###Create a loop for each measurement and experiment
+for (i in c("npq", "phi2", "leafarea")){
+  for (j in c("Dec", "Jan", "Feb")){
+    ###Filter to select each specific month and measured value
+    temp_vector <- filter(depi_all, month == j, measurement == i)
+    ###Initialize an empty data frame
+    temp_df <- data.frame()
+    ###Loop through each flat 
+    for (k in 1:length(unique(temp_vector$flat_number))){
+      ###Create a temporary data frame - each column is the measured values for each flat
+      temp <- filter(temp_vector, flat_number == k)$measured_value
+      temp_df <- addToDF(temp_df, temp)}
+    ###Normalize across the flats
+    temp_normalize <- as.data.frame(normalize.quantiles(as.matrix(temp_df)))%>%
+      ###Add columns with the measurement and experiment to be certain there hasn't been any mix-ups
+      mutate(measurement_verify = i, experiment_verify = j)
+    ###Create a name to give the normalized data based on the measurement and experiment
+    temp_name <- paste(tolower(j), "_", i, "_normalize", sep = "")
+    ###Rename the columns
+    if(ncol(temp_normalize) == 6){
+      temp_normalize <- temp_normalize%>%
+        rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4)
+    }else{
+      temp_normalize <- temp_normalize%>%
+      rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4, flat_5 = 5)}
+    ###Assign the name to the data frame
+    assign(temp_name, temp_normalize)
+    ###Loop through each of the columns that have measured values for each flat
+    for (num in 1:(ncol(temp_normalize) - 2)){
+      ###Filter the relevant matching rows from the depi_all dataframe
+      temp_depi_information <- depi_all%>%
+            filter(measurement == unique(temp_normalize$measurement), month ==  unique(temp_normalize$experiment), flat_number == num)
+      ###Add the column with the normalized data to the depi subset
+      temp_merged <- cbind(temp_depi_information, na.omit(temp_normalize[num]))
+      ###Create a name for this data frame - based on the measurement, month, and flat
+      temp_name_final <- paste(temp_name, "_flat_", num, sep = "")
+
+      names(temp_merged)[length(names(temp_merged))] <- "normalized_value"
+      assign(temp_name_final, temp_merged)
+      
+    }
+  }
+}
+###Combine all seperate data frames
+quantile_normalize_all<- rbind(dec_leafarea_normalize_flat_1,
+      dec_leafarea_normalize_flat_2,
+      dec_leafarea_normalize_flat_3,
+      dec_leafarea_normalize_flat_4,
+      jan_leafarea_normalize_flat_1,
+      jan_leafarea_normalize_flat_2,
+      jan_leafarea_normalize_flat_3,
+      jan_leafarea_normalize_flat_4,
+      feb_leafarea_normalize_flat_1,
+      feb_leafarea_normalize_flat_2,
+      feb_leafarea_normalize_flat_3,
+      feb_leafarea_normalize_flat_4,
+      feb_leafarea_normalize_flat_5,
+      dec_npq_normalize_flat_1,
+      dec_npq_normalize_flat_2,
+      dec_npq_normalize_flat_3,
+      dec_npq_normalize_flat_4,
+      jan_npq_normalize_flat_1,
+      jan_npq_normalize_flat_2,
+      jan_npq_normalize_flat_3,
+      jan_npq_normalize_flat_4,
+      feb_npq_normalize_flat_1,
+      feb_npq_normalize_flat_2,
+      feb_npq_normalize_flat_3,
+      feb_npq_normalize_flat_4,
+      feb_npq_normalize_flat_5,
+      dec_phi2_normalize_flat_1,
+      dec_phi2_normalize_flat_2,
+      dec_phi2_normalize_flat_3,
+      dec_phi2_normalize_flat_4,
+      jan_phi2_normalize_flat_1,
+      jan_phi2_normalize_flat_2,
+      jan_phi2_normalize_flat_3,
+      jan_phi2_normalize_flat_4,
+      feb_phi2_normalize_flat_1,
+      feb_phi2_normalize_flat_2,
+      feb_phi2_normalize_flat_3,
+      feb_phi2_normalize_flat_4,
+      feb_phi2_normalize_flat_5)
+```
+
+Okay, now the final step of this normalize process is to divide by the median value of Col0 on each flat. **I am dividing the normalized values by the median normalized value of Col0 - make sure this is correct!**
+
+
+```{r}
+test <- quantile_normalize_all%>%
+  group_by(month, measurement, flat_number)%>%
+  mutate_each(funs(./median(.[genotype == "Col0"])), normalized_value)
+```
+
+
+```{r}
+quantile_normalize_all%>%
+  filter(time_point == "0", measurement == "npq")%>%
+  group_by(flat_number, genotype, month)%>%
+  tally()%>%
+  filter(genotype == "Col0")
+```
+
+```{r}
+filter(depi_all, flat_number == "1", month =="Dec", genotype == "Col0")
+```
+
+I think we acknowledged that this was a problem before - this isn't always a wild type plant on each flat! And, in some cases there ist only 1 wild type plant per flat. So, this isn't going to work.
+
+```{r}
+depi_all%>%
+  filter(time_point == "0", measurement == "npq")%>%
+  group_by(month, flat_number)%>%
+  summarize(length(unique(individual_plant_metadata)))
+```
+
+Note that we excluded sublines 2, 3, and 4 of Col0, and genotypes B1, B3, B1B3, ftsz-1, ftsz-2, and ftsz-dbl, which explains why the flats appear less full than they actually were. 
+
+One possible cause of this could be because I filtered to only include subline 1 of Col0. Maybe ask Melissa if we could include other sublines - might make it possible to divide each flat by the median value of Col0 then.
+
+```{r}
+unique(filter(depi_all, genotype == "Col0")$subline)
+```
+

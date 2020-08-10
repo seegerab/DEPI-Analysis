@@ -73,11 +73,30 @@ We need to first add column names.
 names(depi_data) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
 ```
 
+Add column with full subline information:
+
+```{r}
+indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+
+indiv_plant_metadata <- indiv_plant_metadata%>%
+  select(V1,V5)%>%
+  rename(plant_ID = V1, full_subline_information = V5)
+
+
+
+depi_data <- merge(depi_data, indiv_plant_metadata, by=c("plant_ID"))
+
+head(depi_data)
+```
 
 We only want to analyze the B1B3 genes in this analysis. And, we only want subline 1 of Col0.
 
 ```{r create_b1b3_subset}
-feb_b1b3 <- depi_data%>%filter(genotype %in% c("b1", "b3", "b1b3" )|(genotype == "Col0"&subline == "1"))
+feb_b1b3 <- depi_data%>%filter(genotype %in% c("b1", "b3", "b1b3" )|(genotype =="Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))
+
+###Confirm we have the correct sublines:
+
+unique(filter(feb_b1b3, genotype == "Col0")$full_subline_information)
 
 ```
 

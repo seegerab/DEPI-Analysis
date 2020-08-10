@@ -80,8 +80,9 @@ depi_data%>%filter(genotype %in% c("b1", "b3", "b1b3", **"Col0"**)|(genotype == 
 I corrected the mistake here. 
 
 ```{r create_b1b3_subset}
-jan_b1b3 <- depi_data%>%filter(genotype %in% c("b1", "b3", "b1b3" )|(genotype == "Col0"&subline == "1"))
+jan_b1b3 <- depi_data%>%filter(genotype %in% c("b1", "b3", "b1b3" )|(genotype =="Col0" & full_subline_information %in% c("Col1_1", "Col1_3", "Col1_4", "Col1_2")))
 
+unique(filter(jan_b1b3, genotype =="Col0")$full_subline_information)
 ```
 
 Next, to stay consistent with the December and February data sets, rename growth to leaf area. 

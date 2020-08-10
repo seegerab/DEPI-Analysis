@@ -75,13 +75,15 @@ names(depi_data) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "me
 ```
 
 
-We only want to analyze the Ftsz genes in this analysis. And, we only want subline 1 of Col0.
+
+We only want to analyze the Ftsz genes in this analysis. And, we only want subline 2 of Col0.
+
 
 ```{r create_Ftsz_subset}
-jan_ftsz <- depi_data%>%filter(genotype %in% c("ftsz-dbl", "ftsz2-1", "ftsz2-2" )|(genotype == "Col0"&subline == "1"))
+jan_ftsz <- depi_data%>%filter(genotype %in% c("ftsz-dbl", "ftsz2-1", "ftsz2-2" )|(genotype =="Col0" & full_subline_information %in% c("Col2_1", "Col2_3", "Col2_4", "Col2_2")))
 
 ##Confirm that we only have subline 1 of Col0
-unique(filter(jan_ftsz, genotype == "Col0")$subline)
+unique(filter(jan_ftsz, genotype == "Col0")$full_subline_information)
 
 ```
 

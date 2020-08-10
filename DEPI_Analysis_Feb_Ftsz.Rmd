@@ -74,14 +74,30 @@ We need to first add column names.
 names(depi_data) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
 ```
 
+Add a column with the full subline information.
 
-We only want to analyze the Ftsz genes in this analysis. And, we only want subline 1 of Col0.
+```{r}
+indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+
+indiv_plant_metadata <- indiv_plant_metadata%>%
+  select(V1,V5)%>%
+  rename(plant_ID = V1, full_subline_information = V5)
+
+
+
+depi_data <- merge(depi_data, indiv_plant_metadata, by=c("plant_ID"))
+
+head(depi_data)
+```
+
+
+We only want to analyze the Ftsz genes in this analysis. And, we only want subline 2 of Col0. (This is a different subline from MPK and B1B3 gene families!)
 
 ```{r create_Ftsz_subset}
-feb_ftsz <- depi_data%>%filter(genotype %in% c("ftsz-dbl", "ftsz2-1", "ftsz2-2" )|(genotype == "Col0"&subline == "1"))
+feb_ftsz <- depi_data%>%filter(genotype %in% c("ftsz-dbl", "ftsz2-1", "ftsz2-2" )|(genotype =="Col0"&full_subline_information %in% c("Col2-1", "Col2-3", "Col2-4", "Col2-2")))
 
-##Confirm that we only have subline 1 of Col0
-unique(filter(feb_ftsz, genotype == "Col0")$subline)
+##Confirm that we only have subline 2 of Col0
+unique(filter(feb_ftsz, genotype == "Col0")$full_subline_information)
 
 ```
 

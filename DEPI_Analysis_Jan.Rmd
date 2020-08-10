@@ -73,7 +73,9 @@ names(depi_data) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "me
 There are some genotypes that are not MPK mutants in this data set. Create a subset of only MPK mutants and  Col0 to use in analysis. Also, only use subline 1 of Col0.
 
 ```{r create_depi_subset}
-depi_subset <- depi_data%>%filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))
+depi_subset <- depi_data%>%filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype =="Col0" & full_subline_information %in% c("Col1_1", "Col1_3", "Col1_4", "Col1_2")))
+
+unique(filter(depi_subset, genotype =="Col0")$full_subline_information)
 ```
 
 Next, to stay consistent with the December and February data sets, rename growth to leaf area. 

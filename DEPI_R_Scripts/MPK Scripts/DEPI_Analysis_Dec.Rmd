@@ -1,0 +1,889 @@
+---
+title: "DEPI Analysis - December MPK"
+author: "Abigail Seeger"
+date: "July 9, 2020"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    fig_height: 25
+    fig_width: 25
+  html_document:
+    fig_height: 25
+    fig_width: 25
+    highlight: tango
+    number_sections: yes
+    theme: paper
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 4
+    toc_float: yes
+
+---
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = TRUE) 
+
+```
+
+This analysis is of Arabadopsis plants grown in the DEPI chambers (Dynamic Enivronmental Photosynthetic Imager) at Michigan State University. The plants are a range of map kinase (MPK) mutants. The purpose of this experiment is to investigate the degree of redundancy in the MPK gene family.
+
+The data was collected in December 2017 and Februrary 2018. These different collection periods will be analyzed seperately in seperate RMD files.
+
+#All Data 
+##Load and clean data
+
+To begin, load necessary packages:
+
+```{r message = FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+###Lemon is used in ggplot2 - facet_rep_grid modification
+library(lemon)
+library(data.table)
+library(ggthemes)
+library(extrafont)
+###Routliers is used for outliersmad to find outliers
+library(Routliers)
+library(stringi)
+library(wesanderson)
+library(viridis)
+```
+
+Next, load in the data.
+
+```{r load_depi_data}
+depi_data <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+head(depi_data)
+```
+
+We need to first add column names.
+
+```{r add_col_names}
+names(depi_data) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+
+```
+
+Add a column with the full subline information:
+
+```{r}
+indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+
+indiv_plant_metadata <- indiv_plant_metadata%>%
+  select(V1,V5)%>%
+  rename(plant_ID = V1, full_subline_information = V5)
+
+depi_data <- merge(depi_data, indiv_plant_metadata, by=c("plant_ID"))
+
+head(depi_data)
+```
+
+Upon investigation, some time points have an "X" in front of them. Remove the "X" in front of these time points.
+
+```{r x_time_points}
+###Proportion of time points that have an "X":
+sum(str_detect(depi_data$time_point, "X"))/nrow(depi_data)
+###Rows that have an "X" in its time point:
+depi_X <- depi_data[which(str_detect(depi_data$time_point, "X")),]
+head(depi_X)
+
+unique(depi_X$time_point)
+unique(depi_X$genotype)
+unique(depi_X$measurement)
+nrow(unique(filter(depi_X, substr(plant_ID, 1,4)=="1217")))
+nrow(unique(filter(depi_X, substr(plant_ID, 1,4)=="0218")))
+
+###Remove these X values
+depi_data$time_point <- as.numeric(gsub("X","", depi_data$time_point))
+```
+
+It looks like the X time points area only in December. They are for a range of time points and genotypes. The X only appears in front of time points that are measuring growth and phi2, not npq. 
+
+There are some genotypes that are not MPK mutants in this data set. Create a subset of only MPK mutants and wildtype Col0 to use in subsequent analysis. Also, only use subline 1 of Col0, because prior investigations have shown that other sublines may behave differently. 
+
+```{r create_depi_subset}
+depi_subset <- depi_data%>%filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0" )|(genotype =="Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))
+
+unique(filter(depi_subset, genotype == "Col0")$full_subline_information)
+
+```
+
+Next, the December collection period has "growth" as a measurement, but the February collection period has "size". These are the same measurement - leaf area. Change both growth and size to leafarea. 
+
+```{r convert_growth_size_leafarea}
+###The December collection period has "growth", while the February collection period has "size"
+###Both of these measurements are recording leaf area, so change both to leafarea
+levels(depi_subset$measurement)[levels(depi_subset$measurement)=="size"] <- "leafarea"
+levels(depi_subset$measurement)[levels(depi_subset$measurement)=="growth"] <- "leafarea"
+```
+
+Create dec_data and feb_data from the depi_subset. This will allow us to analyze each collection period seperately. 
+
+```{r create_feb_dec_subsets}
+###Create two data sets based on collection period and remove border plants 
+feb_data <- filter(depi_subset, substr(plant_ID, 1,4) == "0218", border == FALSE)
+dec_data <- filter(depi_subset, substr(plant_ID, 1,4) == "1217", border == FALSE)
+```
+
+Finally, lets look at the genotype we have:
+
+```{r genotype_invest}
+unique(feb_data$genotype)
+unique(dec_data$genotype)
+```
+
+It looks like they have the same genotypes, except the February experiment has mpk5-17 while the December experiment does not. 
+
+##Create functions
+
+These functions will be applied to the December and February data seperately. 
+
+###add_day_col
+
+The add_day_col function adds a column with the day of the experiment to the data frame. This function first looks for breaks in the data - data was only collected when the lights were on, so a break of greater than five hours indicates a change of day. Then, a number is assigned to indicate the day of the experiment. 
+
+```{r add_day_col}
+add_day_col <- function(data_frame){
+  unique_time <- sort(unique(data_frame$time_point))
+  diff <- c()
+  for (i in 1:length(unique_time)){
+   if (i == 1){
+      diff[1] <- 0
+   }else{
+      diff[i] <- unique_time[i] - unique_time[i-1]}}
+  breaks <-c(0)
+  for (i in 1:length(diff)){
+    if (diff[i] > 5)
+      breaks <- append(breaks, unique_time[i])}
+  out <- data.frame()
+  for (i in 1:length(breaks)){
+    if (i == length(breaks)){
+      indiv <- data_frame%>%filter(time_point >= breaks[i])%>%mutate(day = i)
+   }else{
+    indiv <- data_frame%>%filter(time_point >=breaks[i] & time_point < breaks[i+1])%>%mutate(day = i)}
+    
+    out <- rbind(as.data.frame(indiv), out)}
+  return(out)}
+```
+
+###remove_outliers
+
+The remove_outliers function replaces measured values that are outliers with NA. Because we will analyze the data using nonparametric analysis, this function will not be applied to the data, because outliers have little influence on the median value. 
+
+First, group by genotype, measurement type, and time point. Once we've focused in on this, conduct the outliers_mad test using a conservative threshold value of 3.5. If the outliers_mad function finds an outlier, use the position of the outlier to replace the measured value with NA. 
+
+```{r remove_outliers}
+remove_outliers<- function(df){
+  out <- df%>%
+  group_by(genotype, measurement, time_point)%>%
+  mutate(measured_value = replace(measured_value, outliers_mad(measured_value, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
+  arrange(genotype, measurement, time_point)
+  return(out)}
+```
+
+###p_value
+
+The p_value function finds the p-value for the comparison of each genotype to wildtype in order to answer the question - does the phenotype (either leaf area, npq, or phi2) significantly differ from wild type? The test is repeated for each time point for each genotype.
+
+More information on the specifics used in the Wilcox test can be found [here](http://courses.atlas.illinois.edu/spring2016/STAT/STAT200/RProgramming/NonParametricStats.html) and [here](https://data.library.virginia.edu/the-wilcoxon-rank-sum-test/).
+
+http://courses.atlas.illinois.edu/spring2016/STAT/STAT200/RProgramming/NonParametricStats.html
+and https://data.library.virginia.edu/the-wilcoxon-rank-sum-test/
+
+The function is heavily commented, explaining each step in the pipeline. 
+
+```{r p_value}
+p_value <- function (data_frame){
+  ###Initialize an empty data frame
+  out = data.frame()
+  ###For each genotype:
+  for (i in unique(filter(data_frame, genotype != "Col0")$genotype)){
+    ###We don't want to make comparisons of WT to itself - this could impact FDR correction
+    indiv_data <- data_frame%>% 
+      ###Focus on each time point and measurement
+      group_by(time_point, measurement)%>%
+      ###Create a column with the number of WT individual plants and the number of plants for each genotype
+      ###Use this later to calculate effect size
+      mutate(n_genotype = length(measured_value[genotype == i]), n_wt = length(measured_value[genotype =="Col0"]))%>%
+      ###Create a column of p-values using a nonparametric Wilcox test
+      
+      ###Default set to exact = TRUE, because our sample sizes are too small to use a normal approximation
+      ###But, when there are ties in the values (i.e. one value appears twice in the ranking process), wilcox.test returns to the normal approximation and spits out a warning message
+      ###This may be a problem - include correct = FALSE to stop this from happening 
+
+      
+      ###Paired = FALSE, because the Col0 plants are independet from each genotype
+      ###Correct = FALSE turns off the continuity correction
+      mutate(p = (wilcox.test(measured_value[genotype == i], measured_value[genotype == "Col0"], correct = FALSE, paired = FALSE))$p.value)%>%
+  
+      ###Add a column with each genotype
+      mutate(genotype = i)%>%
+      # mutate(number = unique(filter(feb_data, genotype == i)$number))%>%
+      # mutate(number_2 = unique(filter(feb_data, genotype == i)$number_2))%>%
+      # 
+      select(time_point, genotype, measurement, day, p, n_wt, n_genotype)
+  
+      
+    ###Add individual information to the main data frame
+    out <- rbind(as.data.frame(indiv_data), out)}
+  return(out)}
+```
+
+###corrected_p_value
+
+The corrected_p_value function corrects the p-values using an FDR correction. First, the data is grouped by measurement and time point. Then, the p-value are corrected by the number of genotypes. [This function also computes effect size.](https://stats.stackexchange.com/questions/133077/effect-size-to-wilcoxon-signed-rank-test)
+
+https://stats.stackexchange.com/questions/133077/effect-size-to-wilcoxon-signed-rank-test
+  
+Once again, the function is heavily commented, explaining each step of the pipeline.
+
+```{r corrected_p_value}
+corrected_p_value <- function(data_frame){
+  out <- data_frame%>%
+  ###For some reason, I have multiple copies of each row
+  distinct()%>%
+  ###Group by time point and measurement - we are correcting by the number of genotypes 
+  group_by(time_point, measurement)%>%
+  mutate(p_adj = p.adjust(p, method = "fdr"))%>%
+
+  ###Only report an effect size if the p-value is significant; otherwise, NA
+  mutate(effect = ifelse(p < 0.05, (abs(qnorm(p_adj))/sqrt(n_wt+n_genotype)), NA))%>%
+  mutate(effect_size = case_when(
+    ###Make sure these are the right cut offs for magnitude of effect size
+    (effect <0.1)~"small",
+    (effect>0.1 & effect < 0.5)~"medium",
+    (effect>0.5)~"large"))
+  ###Gather the data to make it easier to plot according to whether p was adjusted
+  out <- gather(out, type, p, p, p_adj)%>%arrange(genotype, time_point)
+  return(out) 
+}
+
+```
+
+###add_number
+
+The add_number function adds two columns - number and number_2. number is used to sort the heat maps that include all genotypes, while number_2 is used to sort the heat maps that are a trio of double and single mutants. 
+
+The code is not intuitive - it is commented throughout to explain each step. 
+
+```{r add_number}
+add_number <- function(data_frame){
+  ###First, if the genotype is Col0 (only genotype with length 4), assign 0 as number
+  ###Else, assign number as genotype with "mpk" removed
+  ###Example: mpk1 will be 1, mpk1-17 will be 1-17
+  data_frame <- data_frame%>%
+    mutate(number = ifelse(genotype != "Col0",(stri_sub(genotype, 4, length(genotype))), 0))
+  ###Next, for all double mutants, replace "-" with "0"
+  ###Example: 1-17 becomes 1017
+  data_frame$number <- as.numeric(gsub("-","0", data_frame$number))
+  ###Almost there! There's a problem with two single digit double mutants
+  ###We need a four digit number to sort correctly 
+  ###Example: mpk1-3 -> 1-3 -> 103, but we need it to be 1003 to sort correctly
+  data_frame$number[data_frame$number == "103"] <- "1003"
+  data_frame$number[data_frame$number == "506"] <- "5006"
+  data_frame$number[data_frame$number == "608"] <- "6008"
+  data_frame$number[data_frame$number == "609"] <- "6009"
+  ###Convert number to a numberic in order to sort
+  data_frame$number <- as.numeric(data_frame$number)
+  data_frame <- data_frame%>%arrange(number)
+  data_frame <- data_frame%>%mutate(number_2 = number)
+  data_frame$number_2[nchar(data_frame$number_2) == 4] <- 0
+  data_frame$number_2[nchar(data_frame$number_2) == 5] <- 0
+  return(data_frame)
+}
+```
+
+###cell_370_data
+
+The cell_370_data function prepares the data to use in visualizations mirrored after page 370 of the Cell paper Dynamic Environmental Photosynthetic Imaging Reveals Emergent Phenotypes.
+
+This function groups the data by genotype, and for each time point and each measurement finds the median measured value of the plants. Because of how variable the leaf area measurements are between time points, only the beginning and end of each day will be plotted. 
+
+
+```{r cell_370_data_function}
+cell_370_data <- function(data_frame){
+  npq_phi2 <- data_frame%>%
+     filter(measurement %in% c("npq","phi2"))%>%
+     group_by(genotype, time_point, measurement)%>%
+     summarize(med = median(measured_value))
+  ###For each day, we want the minimum and maximum time point for leaf area
+  
+  ###Previously included the midpoint - leave code in case we want to use in the future, just commented out
+  
+  ###If there are an odd number of time points, use the median time point
+  ###If there are an even number of time points, instead of finding the average of the two center values, choose the larger value
+  #start_mid_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point), ifelse(length(time_point %% 2 == 0), median(time_point[-1]), median(time_point)))))$time_point)
+  
+  start_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point))))$time_point)
+  
+  leaf_area <- data_frame%>%
+    filter(measurement == "leafarea")%>%
+    filter(time_point %in% start_end)%>%
+    group_by(genotype, time_point, measurement)%>%
+    summarize(med = median(measured_value))
+  
+  out <- rbind(npq_phi2, leaf_area)%>%group_by(genotype, time_point, measurement)
+  
+  return(as.data.frame(out))}
+```
+
+###cell_371_data
+
+The cell_371_data_function prepares the data to use to create visualizations mirrored after page 371 in the Cell paper Dynamic Environmental Photosynthetic Imaging Reveals Emergent Phenotypes.
+
+This function:
+
+* groups the data by time point and measurement and genotype
+* divides the measured value of each genotype by the median wild type value
+* calculates the log 2 value for the median of these values
+
+Similar to above, we are only interested in the start and end time points for the leaf area measurement. 
+
+```{r cell_371_data_function}
+cell_371_data <- function (data_frame) {
+  
+  npq_phi2 <- data_frame%>%
+    filter(measurement %in% c("npq","phi2"))%>%
+    group_by(time_point, measurement)%>%
+    mutate_each(funs(./median(.[genotype == "Col0"])), measured_value)%>%
+    group_by(time_point, measurement, genotype)%>%
+    mutate(log2_fold = log2(median(measured_value)))
+  
+  #start_mid_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point), ifelse(length(time_point %% 2 == 0), median(time_point[-1]), median(time_point)))))$time_point)
+  start_end <- unique((data_frame%>%group_by(day)%>%filter(time_point %in% c(min(time_point), max(time_point))))$time_point)
+  
+  leaf_area <- data_frame%>%
+    filter(measurement == "leafarea")%>%
+    filter(time_point %in% start_end)%>%
+    group_by(time_point, measurement)%>%
+    mutate_each(funs(./median(.[genotype == "Col0"])), measured_value)%>%
+    group_by(time_point, measurement, genotype)%>%
+    mutate(log2_fold = log2(median(measured_value)))
+  
+  out <- rbind(npq_phi2, leaf_area)%>%group_by(genotype, time_point, measurement)
+  
+  return(as.data.frame(out))
+}
+
+```
+
+###Genotype combinations
+
+Finally, define a list of all combinations of single and double mutants. We will use this multiple times in the following analysis to loop through each combination to create plots.
+
+```{r}
+genotype_combinations <- list(c("mpk1-17", "mpk1", "mpk17"), c("mpk1-16", "mpk1", "mpk16"), c("mpk6-9", "mpk6", "mpk9"),
+                              c("mpk17-20","mpk17", "mpk20"), c("mpk14-17", "mpk14", "mpk17"), c("mpk8-17", "mpk8","mpk17"),
+                              c("mpk8-20","mpk8","mpk20"), c("mpk6-18", "mpk6", "mpk18"), c("mpk1-13", "mpk1", "mpk13"), c("mpk17-20", "mpk17", "mpk20"), c("mpk13-20", "mpk13", "mpk20"), c("mpk6-8", "mpk6", "mpk8"), c("mpk9-18", "mpk9", "mpk18"),
+                              c("mpk6-20", "mpk6", "mpk20"), c("mpk14-16", "mpk14", "mpk16"), c("mpk18-20", "mpk18", "mpk20"), c("mpk5-6", "mpk5", "mpk6"), c("mpk14-18", "mpk14", "mpk18"), c("mpk5-6", "mpk5", "mpk6"), c("mpk14-18", "mpk14", "mpk18"), c("mpk5-17", "mpk5", "mpk17"),
+                              c("mpk1-3", "mpk1", "mpk3"), c("mpk1-17", "mpk1", "mpk17"), c("mpk3-16", "mpk3", "mpk16"), c("mpk9-16", "mpk9", "mpk16"), c("mpk14-20", "mpk14", "mpk20"))
+```
+
+#December Analysis
+##Further Cleaning
+Here, we repeat the analysis used in February for December.
+
+Here is a summary of the measured values.
+```{r dec_summary_measured_value}
+summary(dec_data$measured_value)
+dec_data%>%group_by(measurement)%>%summarize(min = min(measured_value))
+```
+
+It looks like we've run into a few problems. First, npq values are negative, yet we know they should all be positive. And, for some reason we have NA values in phi2. 
+
+To address these problems, start by shifting all of the npq values by the minimum value. 
+
+```{r dec_shift_npq}
+dec_data$measured_value[dec_data$measurement == "npq"] <- (dec_data$measured_value[dec_data$measurement == "npq"])+abs(min((filter(dec_data, measurement == "npq"))$measured_value))
+
+```
+
+Next, address the problems with phi2.
+
+```{r dec_phi2_investigations}
+###Here is the percentage of negative phi2 values:
+nrow(filter(dec_data, measurement == "phi2", measured_value <0))/nrow(dec_data)*100
+###Here are the rows with NA for a measured value:
+dec_data[which(is.na(dec_data$measured_value)),]
+###Because only two rows have negative phi2 values, remove these rows 
+dec_data <- na.omit(dec_data)
+###Now, shift all phi2 values by the minimum measured_value
+dec_data$measured_value[dec_data$measurement == "phi2"] <- (dec_data$measured_value[dec_data$measurement == "phi2"])+abs(min((filter(dec_data, measurement == "phi2"))$measured_value))
+
+```
+
+Before moving forward, reexamine the summary of measured values.
+
+```{r dec_reexamine_summary}
+summary(dec_data$measured_value)
+dec_data%>%group_by(measurement)%>%summarize(min = min(measured_value))
+
+```
+
+Everything looks good!! We can continue.
+
+Next, add a column with the day to the data, and columns with number and number_2 that we will use later to sort visualizations. 
+
+```{r dec_apply_functions}
+dec_data <- add_day_col(add_number(dec_data))
+```
+
+Even though we won't remove outliers from the data set, we still want to see how many of our measured values would be considered outliers. 
+```{r dec_outliers}
+dec_outliers <- remove_outliers(dec_data)
+###Number of outliers
+sum(is.na(dec_outliers$measured_value))
+###Proportion of measured values that are outliers
+sum(is.na(dec_outliers$measured_value))/nrow(dec_outliers)
+```
+
+This proportion is similar to the propotion of outliers in the February data set.
+
+## P-Values
+
+Next, apply the p_value function to the data, and make sure that the function is working properly by completing a few random tests of the data. 
+
+```{r  message = FALSE, warning = FALSE}
+dec_data_p <- p_value(dec_data)
+
+###Test 1 
+unique(filter(dec_data_p, genotype == "mpk1", time_point == "1", measurement == "npq")$p)
+a <- filter(dec_data, genotype == "mpk1", time_point == "1", measurement == "npq")$measured_value
+b <- filter(dec_data, genotype == "Col0", time_point == "1", measurement == "npq")$measured_value
+wilcox.test(a, b, correct = FALSE)$p.value
+###Test 2
+unique(filter(dec_data_p, genotype == "mpk14-17", time_point == "0", measurement == "leafarea")$p)
+c <- filter(dec_data, genotype == "mpk14-17", time_point == "0", measurement == "leafarea")$measured_value
+d <- filter(dec_data, genotype == "Col0", time_point == "0", measurement == "leafarea")$measured_value
+wilcox.test(c,d, correct = FALSE)$p.value
+###Test 3
+unique(filter(dec_data_p, genotype == "mpk13", time_point == "0", measurement == "phi2")$p)
+e <- filter(dec_data, genotype == "mpk13", time_point == "0", measurement == "phi2")$measured_value
+f <- filter(dec_data, genotype == "Col0", time_point == "0", measurement == "phi2")$measured_value
+wilcox.test(e,f, correct = FALSE)$p.value
+```
+
+Now, correct the p-values using an FDR correction. Also, convert the effect sizes to factor so we can create levels and sort subsequent plots properly. 
+
+```{r dec_correct_p_values}
+dec_data_p_corrected <- corrected_p_value(dec_data_p)
+dec_data_p_corrected$effect_size <- factor(dec_data_p_corrected$effect_size, levels = c("small", "medium", "large"))
+summary(dec_data_p_corrected$effect_size)
+```
+
+Notice that some effect sizes are infinity. This applies to all p-values of 1, because qnorm(1) = infinity. 
+
+Here is the distribution of the effect sizes and the rows that contain infinite effect sizes. 
+
+```{r dec_investigate_effect}
+ggplot(data = subset(dec_data_p_corrected, !is.na(effect_size)), aes(x = effect_size, na.rm = TRUE))+
+  geom_bar()+
+  labs(x = "Effect size", y = "Count", title = "December: Effect size for significant p-values")+
+  theme_minimal(base_family = "Calibri",
+              base_size = 50)
+
+dec_data[(which(dec_data_p_corrected$effect==Inf)),]
+```
+
+Next, look at summary statistics for the p-values:
+
+```{r dec_summary_p}
+###Summary statistics for the p values for each measurement;leaf area is never significant
+dec_data_p_corrected%>%group_by(measurement, type)%>%summarize(median = median(p), min = min(p), max = max(p))
+###Here, get counts for p-values, grouped by whether they were adjusted or not; notice that adjustment makes many significant p-values insignificant
+dec_data_p_corrected%>%group_by(type)%>%summarize(p_lessthan_0.05 = sum(p<0.05), p_0.05_0.1 = sum(0.05<p & p<0.1), p_0.1_0.2 = sum(0.1<p & p<0.2))
+
+```
+
+Next, we will visualize p-values for December. Create a modified data frame to be used in to create visualizations.
+
+```{r dec_create_plot_data}
+dec_data_plot <- add_number(dec_data_p_corrected)
+```
+
+First, investigate the distribution of corrected and uncorrected p-values for all measurements.
+
+```{r dec_p_dist}
+###Plot the p-values seperated by the adjusted and initial values
+ggplot(dec_data_plot, aes(x=p, color=type)) +
+  geom_histogram(position="stack", fill = "white", size = 5)+
+  scale_color_viridis(discrete = TRUE, option = "E")+
+  facet_grid(~measurement)+
+  ###Include a vertical line with the significant p-value alpha = 0.05
+  geom_text(aes(x = 0.18, label = "p=0.05", y =  3000), color = "black", size = 15)+
+  geom_vline(xintercept=0.05, color = "black", size = 1)+
+  theme_minimal(base_family = "Calibri",
+              base_size = 50)+
+  labs(x = "P-Value", y = "Count", title = "December: P-value Distribution")
+
+#ggsave("dec_adjusted_unadjusted_p_values.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+```
+
+### Uncorrected p-value heat maps
+
+Next, create subsets of the data based on measurement. We want to plot the p-values for phi2, npq, and leaf area seperately.
+
+Add bins for the p-values to easily visualize what is significant and what isn't. The minimum p-value for leafarea is greater than 0.05. **No leaf area measurement is significantly different from wildtype, so we don't need to include a heat map for leaf area.**
+
+```{r dec_plot_subsets}
+###Create seperate data frames for each measurement to use in heat maps; don't use adjusted p-values
+dec_npq <- filter(dec_data_plot, measurement == "npq", type == "p")%>%
+  ###Create a new column with the p-value "bins"
+  mutate(bin = case_when(
+    (p <0.01)~ 'p<0.01',
+    (p>0.01 & p < 0.05)~ "0.01<p<0.05",
+    (p>0.05)~"p>0.05"))
+dec_phi2 <- filter(dec_data_plot, measurement == "phi2", type == "p")%>%
+  mutate(bin = case_when(
+    (p <0.01)~ 'p<0.01',
+    (p>0.01 & p < 0.05)~ "0.01<p<0.05",
+    (p>0.05)~"p>0.05"))
+
+```
+
+In order to use these bins as the fill for the heat maps, we need to first convert them to a factor, reorder these factors so p<0.01 appears as the first bin, and reorder by number, so that wild type is first, followed by single mutants, followed by double mutants.
+
+```{r dec_modify_bins}
+
+###In order to use these bins as the fill in a heat map, convert to a factor
+dec_npq$bin <- as.factor(dec_npq$bin)
+dec_phi2$bin <- as.factor(dec_phi2$bin)
+###We want p<0.1 to be first in the legend, so refactor with p<0.01 as the first term
+dec_npq$bin <- relevel(dec_npq$bin, 'p<0.01')
+dec_phi2$bin <- relevel(dec_phi2$bin, 'p<0.01')
+###Reorder by number so heat map has WT first, then single, then double mutants
+dec_npq$genotype <- reorder(dec_npq$genotype, dec_npq$number)
+dec_phi2$genotype <- reorder(dec_phi2$genotype, dec_phi2$number)
+```
+
+
+Next, create a heat map for each measurement. In each case:
+
+* x is time point
+* y is genotype
+* fill is p-value
+
+```{r dec_uncorrected_p_value_heat_maps}
+##### ----- Dec p-value heat map - NPQ ------
+ggplot(data = dec_npq, aes(x = time_point, y = genotype, fill = bin)) + 
+  labs(fill = "P-Value, \nwithout FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Uncorrected")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_manual(values = c("red", "orange", "black"))
+#ggsave("dec_npq_uncorrected.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+##### ----- Dec p-value heat map - phi2 ------
+ggplot(data = dec_phi2, aes(x = time_point, y = genotype, fill = bin)) + 
+  labs(fill = "P-Value, \nwithout FDR Correction", x = "Hours", y = NULL, title = "December: Phi2 P-value, Uncorrected")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_manual(values = c("red", "orange", "black"))
+#ggsave("dec_phi2_uncorrected.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+```
+
+### Corrected p-value heat maps
+
+Now, we want these same visualizations but using the corrected p-values instead of uncorrected p-values. Once again, leaf area is not significant, so no need to include a heat map of p-values. 
+
+```{r dec_plot_data_adj}
+###Create seperate data frames for each measurement to use in heat maps; only use adjusted p-values
+dec_npq_adj <- filter(dec_data_plot, measurement == "npq", type == "p_adj")%>%
+  ###Create a new column with the p-value "bins"
+  mutate(bin = case_when(
+    (p <0.01)~ 'p<0.01',
+    (p>0.01 & p < 0.05)~ "0.01<p<0.05",
+    (p>0.05)~"p>0.05"))
+dec_phi2_adj <- filter(dec_data_plot, measurement == "phi2", type == "p_adj")%>%
+  mutate(bin = case_when(
+    (p>0.01 & p < 0.05)~ "0.01<p<0.05",
+    (p>0.05)~"p>0.05"))
+```
+
+Modify the bins and properly sort the bins and genotypes for the p-value heat maps.
+
+```{r dec_plot_modify_bins_adj}
+###In order to use these bins as the fill in a heat map, convert to a factor
+dec_npq_adj$bin <- as.factor(dec_npq_adj$bin)
+dec_phi2_adj$bin <- as.factor(dec_phi2_adj$bin)
+###We want p<0.1 to be first in the legend, so refactor with p<0.01 as the first term
+dec_npq_adj$bin <- relevel(dec_npq_adj$bin, 'p<0.01')
+dec_phi2_adj$bin <- relevel(dec_phi2_adj$bin, "0.01<p<0.05")
+###Reorder by number so heat map has WT first, then single, then double mutants
+dec_npq_adj$genotype <- reorder(dec_npq$genotype, dec_npq_adj$number)
+dec_phi2_adj$genotype <- reorder(dec_phi2_adj$genotype, dec_phi2_adj$number)
+
+
+```
+
+Create heat maps for the adjusted p-values.
+
+```{r dec_p_value_heat_maps_adj}
+##### ----- Dec p-value heat map - NPQ ------
+ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) + 
+  labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_manual(values = c("red", "orange", "black"))
+#ggsave("dec_npq_corrected.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+##### ----- Dec p-value heat map - phi2 ------
+ggplot(data = dec_phi2_adj, aes(x = time_point, y = genotype, fill = bin)) + 
+  labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: Phi2 P-value, Corrected")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_manual(values = c("red", "black"))
+#ggsave("dec_phi2_corrected.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+```
+
+
+## Cell 371
+Next, we'll transition to general visualizations for December.
+
+Apply the cell_371_data function to December, and add columns with the day, number, and number_2.
+
+```{r dec_cell_371}
+cell_371_dec <- cell_371_data(add_day_col(dec_data))
+cell_371_dec <- add_number(cell_371_dec)
+```
+
+Next, we want to verify that our function is giving us the correct log fold values.
+
+```{r dec_verify_median}
+###Test 1 
+a <- filter(dec_data, genotype == "mpk1", time_point == "1", measurement == "npq")$measured_value
+b <- filter(dec_data, genotype == "Col0", time_point == "1", measurement == "npq")$measured_value
+c <- log2(median(a/median(b)))
+unique(c)
+unique(filter(cell_371_dec, genotype == "mpk1", time_point == "1", measurement == "npq")$log2_fold)
+###Test 2 
+d <- filter(dec_data, genotype == "mpk9-16", time_point == "1", measurement == "phi2")$measured_value
+e <- filter(dec_data, genotype == "Col0", time_point == "1", measurement == "phi2")$measured_value
+f <- log2(median(d/median(e)))
+f
+unique(filter(cell_371_dec, genotype == "mpk9-16", time_point == "1", measurement == "phi2")$log2)
+
+```
+
+
+Everything looks good - time to plot!
+
+Begin by creating heat maps using the data from the Cell 371 preperation. Create subsets of the December data based on measurement, and reorder each of the subsets by the number. 
+
+```{r dec_cell_371_subsets}
+cell_371_leafarea_dec <- cell_371_dec%>%filter(measurement == "leafarea")%>%arrange(number)
+cell_371_npq_dec <- cell_371_dec%>%filter(measurement == "npq")%>%arrange(number)
+cell_371_phi2_dec <- cell_371_dec%>%filter(measurement == "phi2")%>%arrange(number)
+
+###Reorder each measurement data set by the number column so Col0 is on top, followed by single, followed by double mutants
+cell_371_leafarea_dec$genotype <- reorder(cell_371_leafarea_dec$genotype, cell_371_leafarea_dec$number)
+cell_371_npq_dec$genotype <- reorder(cell_371_npq_dec$genotype, cell_371_npq_dec$number)
+cell_371_phi2_dec$genotype <- reorder(cell_371_phi2_dec$genotype, cell_371_phi2_dec$number)
+
+```
+
+```{r dec_logfold_summary}
+summary(cell_371_dec$log2_fold)
+```
+
+Next, plot the data. Some notes: I chose to set the color scale to be in the range of -1.5 to 0.8 for all measurements. I chose the same scale so that all three heat maps were comparable. This encompasses the range of the log fold change values for December. 
+
+```{r dec_logfold_heat_maps}
+##### ----- DEC Phi2 heat map - all genotypes ------
+
+ggplot(data = cell_371_phi2_dec, aes(x = time_point, y = genotype, fill = log2_fold)) + 
+  labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "December: Phi2 Log 2 Fold Change")+
+  #geom_tile(width = 10 , height = 20)+
+  geom_tile(width = 10, height = 10)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+               base_size = 50)+
+  # theme(strip.background.y = element_blank(),
+  #       strip.text.y = element_blank(),
+  #       panel.spacing=unit(0, "lines"))+
+  # 
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  #scale_fill_manual(values = )
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-1.5, .8), breaks = c(-1.5, 0, 0.8), labels = c("-1.5", "0", "0.8"))
+#ggsave("dec_phi2_heatmap.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+##### ----- DEC Leaf area heat map - all genotypes ------
+
+###Confirm that each day has two "cells" - this is because we selected only start and end points for each day
+ggplot(data = cell_371_leafarea_dec, aes(x = time_point, y = genotype, fill = log2_fold)) + 
+  labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "December: Leaf Area Log 2 Fold Change")+
+  geom_tile(width = 16 , height = 30)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  # theme(strip.background.y = element_blank(),
+  #       strip.text.y = element_blank(),
+  #       panel.spacing=unit(0, "lines"))+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-1.5, .8), breaks = c(-1.5, 0, 0.8), labels = c("-1.5", "0", "0.8"))
+#ggsave("dec_leafarea_heatmap.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+##### ----- DEC NPQ heat map - all genotypes ------
+
+ggplot(data = cell_371_npq_dec, aes(x = time_point, y = genotype, fill = log2_fold)) + 
+  labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "December: NPQ Log 2 Fold Change")+
+  geom_tile(width = 10 , height = 20)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 50)+
+  # theme(strip.background.y = element_blank(),
+  #       strip.text.y = element_blank(),
+  #       panel.spacing=unit(0, "lines"))+
+  
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-1.5, .8), breaks = c(-1.5, 0, 0.8), labels = c("-1.5", "0", "0.8"))
+#ggsave("dec_npq_heatmap.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+```
+
+Here we plot the same data, except in combinations of double and accompanying single mutants in a loop. Note we sort by number_2, because we want the double mutant to appear at the top of each plot. 
+
+```{r dec_cell_371_loop}
+for (element in genotype_combinations){
+  for (m in c("npq", "leafarea", "phi2")){
+    data <- filter(cell_371_dec, genotype %in% element, measurement == m)
+    data$genotype <- reorder(data$genotype, data$number_2)
+    plot <- ggplot(data = data, aes(x = time_point, y = genotype, fill = log2_fold)) + 
+      labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = paste("December:", m, "Log 2 Fold Change"))+
+      geom_tile(width = ifelse(m == "leafarea", 16, 10) , height = 30)+
+      facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 50)+
+      # theme(strip.background.y = element_blank(),
+      #       strip.text.y = element_blank(),
+      #       panel.spacing=unit(0, "lines"))+
+      theme(strip.background.y = element_blank(),
+            strip.text.y = element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            panel.spacing=unit(0, "lines"))+
+      scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-1.5, .8), breaks = c(-1.5, 0, 0.8), labels = c("-1.5", "0", "0.8"))
+    print(plot)
+    #ggsave(plot, filename=paste("dec_cell_371_",element[1],"_", m ,".png",sep=""), scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+    
+  }
+}
+```
+
+## Cell 370
+Now that we've plotted the heat maps, we can move forward with plots mirrored after page 370 in the Cell paper.
+
+Apply the cell_370_data_function to the December data, and add columns with the day, number, and number_2.
+
+```{r dec_cell_370}
+cell_370_data_dec <- cell_370_data(add_day_col(dec_data))
+cell_370_data_dec <- add_number(cell_370_data_dec)
+cell_370_data_dec <- add_day_col(cell_370_data_dec)
+
+cell_370_data_dec$genotype <- reorder(cell_370_data_dec$genotype, cell_370_data_dec$number)
+
+```
+
+```{r dec_cell_370_loop}
+for (element in genotype_combinations){
+  data <- filter(cell_370_data_dec, genotype %in% c(element, "Col0"))
+  plot <- ggplot(data = data, aes(x = time_point, y = med))+
+    geom_line(aes(color = genotype), size = 5)+
+    facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+    labs(x = "Hours", y = NULL)+
+    theme_tufte(base_family = "Calibri",
+                base_size = 50)+
+    theme(strip.background.x = element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color = "black", fill = NA, size = 1),
+          axis.line=element_line(),
+          panel.spacing = unit(1, "lines"))+
+  #scale_x_continuous(breaks    
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,
+  #159,168,183,192,207,216,231,240,255,264,279),0))+
+    scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+  print(plot)
+  #ggsave(plot, filename=paste("dec_cell_370_",element[1],".png",sep=""), scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+}
+```
+

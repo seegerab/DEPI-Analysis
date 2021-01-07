@@ -1,9 +1,9 @@
 {
-    "path" : "~/Research/Shiu Lab/Shiu Lab - R",
-    "sortOrder" : [
+    "path": "~/Research/Shiu_Lab/Shiu_Lab_R/DEPI_R_Scripts/B1B3 Scripts",
+    "sortOrder": [
         {
-            "ascending" : true,
-            "columnIndex" : 2
+            "columnIndex": 2,
+            "ascending": true
         }
     ]
 }

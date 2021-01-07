@@ -1,5 +1,7 @@
-*.pdf
 *.txt
-*.html
 *.png
+*.tiff
 */*
+.Rproj.user
+.Rhistory
+.RData

@@ -1,9 +1,33 @@
 ---
-title: "Create Line Plots - Cleaned Data"
+title: "Create line plots - clean data"
 author: "Abigail Seeger"
-date: "1/8/2021"
-output: html_document
+date: "January 8, 2021"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    fig_height: 25
+    fig_width: 25
+  html_document:
+    fig_height: 25
+    fig_width: 25
+    highlight: tango
+    number_sections: yes
+    theme: paper
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 4
+    toc_float: yes
 ---
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = FALSE) 
+
+```
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -13,6 +37,31 @@ This code will recreate the line plots created in the Summer. Except, I will use
 
 These plots will be created for each month (December, January, and February), and each measurement (npq, phi2, and leafarea).
 
+```{r message = FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+###Lemon is used in ggplot2 - facet_rep_grid modification
+library(lemon)
+library(data.table)
+library(ggthemes)
+library(extrafont)
+###Routliers is used for outliersmad to find outliers
+library(Routliers)
+library(stringi)
+library(wesanderson)
+library(viridis)
+library(reshape2)
+library(sm)
+library(lme4)
+library(lmerTest)
+library(lsmeans)
+library(car)
+library(ggcorrplot)
+library(preprocessCore)
+library(grid)
+
+```
 # Read in the data
 
 ```{r}
@@ -54,7 +103,7 @@ Note that in this function, I changed measured_value to normalized_value.
 cell_370_data <- function(data_frame){
   npq_phi2 <- data_frame%>%
      filter(measurement %in% c("npq","phi2"))%>%
-     group_by(genotype, time_point, measurement)%>%
+     group_by(genotype, time_point, measurement, month)%>%
      summarize(med = median(normalized_value))
   ###For each day, we want the minimum and maximum time point for leaf area
   
@@ -72,7 +121,7 @@ cell_370_data <- function(data_frame){
     group_by(genotype, time_point, measurement)%>%
     summarize(med = median(normalized_value))
   
-  out <- rbind(npq_phi2, leaf_area)%>%group_by(genotype, time_point, measurement)
+  out <- rbind(npq_phi2, leaf_area)%>%group_by(genotype, time_point, measurement, month)
   
   return(as.data.frame(out))}
 ```
@@ -112,35 +161,97 @@ genotype_combinations <- list(c("mpk1-17", "mpk1", "mpk17"), c("mpk1-16", "mpk1"
 
 # Create Plots
 
-```{r cell_370_loop}
-for (temp_month in c("Dec", "Jan", "Feb")){
-  plot_data <- filter(depi_data, month == temp_month)
-  
-  plot_data <- cell_370_data(plot_data)
-  plot_data <- add_number(plot_data)
-  plot_data <- add_day_col(plot_data)
-  plot_data$genotype <- reorder(plot_data$genotype, plot_data$number)
-  
-  for (element in genotype_combinations){
-    data <- filter(plot_data, genotype %in% c(element, "Col0"))
-    plot <- ggplot(data = data, aes(x = time_point, y = med))+
-      geom_line(aes(color = genotype), size = 5)+
-      facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
-      labs(x = "Hours", y = NULL, title = temp_month)+
-      theme_tufte(base_family = "Calibri",
-                  base_size = 50)+
-      theme(strip.background.x = element_blank(),
-            axis.title.x=element_blank(),
-            axis.text.x=element_blank(),
-            axis.ticks.x=element_blank(),
-            panel.border = element_rect(color = "black", fill = NA, size = 1),
-            axis.line=element_line(),
-            panel.spacing = unit(1, "lines"))+
-      scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
-    print(plot)
-  }
+## December
+
+```{r }
+plot_data <- filter(depi_data, depi_data$month == "Dec")
+
+plot_data <- cell_370_data(plot_data)
+plot_data <- add_number(plot_data)
+plot_data <- add_day_col(plot_data)
+plot_data$genotype <- reorder(plot_data$genotype, plot_data$number)
+
+for (element in genotype_combinations){
+  data <- filter(plot_data, genotype %in% c(element, "Col0"))
+  plot <- ggplot(data = data, aes(x = time_point, y = med))+
+    geom_line(aes(color = genotype), size = 3)+
+    facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+    labs(x = "Hours", y = NULL, title = "December")+
+    theme_tufte(base_family = "Calibri",
+                base_size = 50)+
+    theme(strip.background.x = element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color = "black", fill = NA, size = 1),
+          axis.line=element_line(),
+          panel.spacing = unit(1, "lines"))+
+    scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+  print(plot)
 }
+
 ```
 
 
+## January
 
+```{r }
+plot_data <- filter(depi_data, depi_data$month == "Jan")
+
+plot_data <- cell_370_data(plot_data)
+plot_data <- add_number(plot_data)
+plot_data <- add_day_col(plot_data)
+plot_data$genotype <- reorder(plot_data$genotype, plot_data$number)
+
+for (element in genotype_combinations){
+  data <- filter(plot_data, genotype %in% c(element, "Col0"))
+  plot <- ggplot(data = data, aes(x = time_point, y = med))+
+    geom_line(aes(color = genotype), size = 3)+
+    facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+    labs(x = "Hours", y = NULL, title = "January")+
+    theme_tufte(base_family = "Calibri",
+                base_size = 50)+
+    theme(strip.background.x = element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color = "black", fill = NA, size = 1),
+          axis.line=element_line(),
+          panel.spacing = unit(1, "lines"))+
+    scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+  print(plot)
+}
+
+```
+
+
+## Februray
+
+```{r }
+plot_data <- filter(depi_data, depi_data$month == "Feb")
+
+plot_data <- cell_370_data(plot_data)
+plot_data <- add_number(plot_data)
+plot_data <- add_day_col(plot_data)
+plot_data$genotype <- reorder(plot_data$genotype, plot_data$number)
+
+for (element in genotype_combinations){
+  data <- filter(plot_data, genotype %in% c(element, "Col0"))
+  plot <- ggplot(data = data, aes(x = time_point, y = med))+
+    geom_line(aes(color = genotype), size = 3)+
+    facet_rep_grid(measurement ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+    labs(x = "Hours", y = NULL, title = "February")+
+    theme_tufte(base_family = "Calibri",
+                base_size = 50)+
+    theme(strip.background.x = element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color = "black", fill = NA, size = 1),
+          axis.line=element_line(),
+          panel.spacing = unit(1, "lines"))+
+    scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+  print(plot)
+}
+
+```

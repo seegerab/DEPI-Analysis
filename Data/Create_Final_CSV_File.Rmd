@@ -1,0 +1,336 @@
+---
+title: "Create Final .csv"
+author: "Abigail Seeger"
+date: "January 8, 2021"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    fig_height: 25
+    fig_width: 25
+  html_document:
+    fig_height: 25
+    fig_width: 25
+    highlight: tango
+    number_sections: yes
+    theme: paper
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = TRUE) 
+
+```
+
+The purpose of this script is to create a .csv file of the combined data that has the outliers removed and has been quantile normalized.
+
+Now, instead of copying this code block into all my scripts, I can just call the newly created .csv file. 
+
+
+# Load Packages
+
+```{r message = FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+###Lemon is used in ggplot2 - facet_rep_grid modification
+library(lemon)
+library(data.table)
+library(ggthemes)
+library(extrafont)
+###Routliers is used for outliersmad to find outliers
+library(Routliers)
+library(stringi)
+library(wesanderson)
+library(viridis)
+library(reshape2)
+library(sm)
+library(lme4)
+library(lmerTest)
+library(lsmeans)
+library(car)
+library(ggcorrplot)
+library(preprocessCore)
+library(grid)
+
+```
+
+# Create Functions 
+
+```{r echo = FALSE}
+add_day_col <- function(df){
+  df$time_point <- as.numeric(df$time_point)
+  out <- df%>%
+  mutate(day = case_when(
+  (df$time_point < 24)~ "1",
+  (df$time_point >= 24 & df$time_point < 48)~ '2',
+  (df$time_point >= 48 & df$time_point < 72)~ '3',
+  (df$time_point >= 72 & df$time_point < 96)~ '4',
+  (df$time_point >= 96 & df$time_point < 120)~ '5',
+  (df$time_point >= 120 & df$time_point < 144)~ '6',
+  (df$time_point >= 144 & df$time_point < 168)~ '7',
+  (df$time_point >= 168 & df$time_point < 192)~ '8',
+  (df$time_point >= 192 & df$time_point < 216)~ '9',
+  (df$time_point >= 216 & df$time_point < 240)~ '10',
+  (df$time_point >= 240 & df$time_point < 264)~ '11',
+  (df$time_point >= 264 & df$time_point < 288)~ '12',
+  (df$time_point >= 288 & df$time_point < 312)~ '13',
+  (df$time_point >= 312 & df$time_point < 336)~ '14',
+  (df$time_point >= 336 & df$time_point < 360)~ '15',
+  (df$time_point >= 360 & df$time_point < 384)~ '16',
+  (df$time_point >= 384 & df$time_point < 408)~ '17',
+  (df$time_point >= 408 & df$time_point < 432)~ '18',
+  (df$time_point >= 432 & df$time_point < 456)~ '19',
+  (df$time_point >= 456 & df$time_point < 480)~ '20',
+  (df$time_point >= 480 & df$time_point < 504)~ '21',
+  (df$time_point >= 504 & df$time_point < 528)~ '22',
+  (df$time_point >= 528 & df$time_point < 552)~ '23',
+  (df$time_point >= 552 & df$time_point < 576)~ '24',
+  (df$time_point >= 576 & df$time_point < 600)~ '25'
+  ))
+  out$day <- as.integer(out$day)
+  return(out)}
+```
+
+
+```{r remove_outliers}
+remove_outliers<- function(df){
+  out <- df%>%
+  group_by(genotype, measurement, time_point)%>%
+  mutate(measured_value = replace(measured_value, outliers_mad(measured_value, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
+  arrange(genotype, measurement, time_point)
+  return(out)}
+```
+
+
+```{r}
+#Function to add vector as column
+addToDF <- function(df, v){
+ nRow <- nrow(df)
+ lngth <- length(v)
+ if(nRow > lngth){
+   length(v) <- nRow
+ }else if(nRow < lngth){
+   df[(nRow+1):lngth, ] <- NA
+ }
+ cbind(df,v)
+}
+```
+
+# Load Data
+
+```{r}
+###Read in the January Data
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_Jan_Seeger_Old.txt", sep = ",", header = FALSE)
+###Read in the December and February Data
+depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+###Add column names to depi_jan
+names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
+###Add column names to depi_dec_feb
+names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+###Read in the individual plant metadata, because we need the full subline information to select the correct sublines of Col0
+indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+###Rename columns 
+indiv_plant_metadata <- indiv_plant_metadata%>%
+  select(V1,V5)%>%
+  rename(plant_ID = V1, full_subline_information = V5)
+###Merge the individual plant metadata with the depi_dec_feb data
+depi_dec_feb <- merge(depi_dec_feb, indiv_plant_metadata, by=c("plant_ID"))
+
+###For each month:
+###Select only the columns that we need and add a column with the month
+dec_data <- depi_dec_feb%>%
+    filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype =="Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))%>%
+  filter(substr(plant_ID, 1,4) == "1217")%>%
+  filter(border == FALSE)%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline, full_subline_information)%>%
+  mutate(month = "Dec")
+jan_data <- depi_jan%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype =="Col0"&full_subline_information %in% c("Col1_1", "Col1_3", "Col1_4", "Col1_2")))%>%  
+  filter(border == FALSE)%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline, full_subline_information)%>%
+  mutate(month = "Jan")
+feb_data <- depi_dec_feb%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype =="Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))%>%
+  filter(border == FALSE)%>%
+  filter(substr(plant_ID, 1,4) == "0218")%>%
+  select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline, full_subline_information)%>%
+  mutate(month = "Feb")
+
+###Remove the "X" in front of some time points
+dec_data$time_point <- as.numeric(gsub("X","", dec_data$time_point))
+feb_data$time_point <- as.numeric(gsub("X","", feb_data$time_point))
+
+###Add a column with the day
+dec_data <- add_day_col(dec_data)
+jan_data <- add_day_col(jan_data)
+feb_data <- add_day_col(feb_data)
+
+###Shift all NPQ values so the minimum is 0
+dec_data$measured_value[dec_data$measurement == "npq"] <- (dec_data$measured_value[dec_data$measurement == "npq"])+abs(min((filter(dec_data, measurement == "npq"))$measured_value))
+
+jan_data$measured_value[jan_data$measurement == "npq"] <- (jan_data$measured_value[jan_data$measurement == "npq"])+abs(min((filter(jan_data, measurement == "npq"))$measured_value))
+
+feb_data$measured_value[feb_data$measurement == "npq"] <- (feb_data$measured_value[feb_data$measurement == "npq"])+abs(min((filter(feb_data, measurement == "npq"))$measured_value))
+
+###Remove the 2 NA values for phi2, and shift the phi2 measured values by the minimum values to ensure the minimum value is 0
+dec_data <- na.omit(dec_data)
+
+dec_data$measured_value[dec_data$measurement == "phi2"] <- (dec_data$measured_value[dec_data$measurement == "phi2"])+abs(min((filter(dec_data, measurement == "phi2"))$measured_value))
+
+###Merge the two data frames, only using the columns they have in common
+depi_all <- rbind(dec_data, jan_data, feb_data)%>%
+  arrange(genotype, time_point, month)
+
+###Filter the time points by the max time point of the shortest experiment - can't make comparisons on days that the three experiments don't share
+depi_all <- as.data.frame(depi_all%>%
+    filter(time_point <= min(c(max(jan_data$time_point), max(dec_data$time_point), max(feb_data$time_point)))))
+
+###Rename size and growth to be leafarea
+depi_all$measurement[depi_all$measurement == "size"] <- "leafarea"
+depi_all$measurement[depi_all$measurement == "growth"] <- "leafarea"
+```
+
+# Remove Outliers
+
+```{r}
+remove_out <- remove_outliers(depi_all)
+```
+
+
+# Quantile Normalization
+
+```{r message = FALSE}
+###Create a loop for each measurement and experiment
+for (i in c("npq", "phi2", "leafarea")){
+  for (j in c("Dec", "Jan", "Feb")){
+    ###Filter to select each specific month and measured value
+    
+    ###Use the data frame with the outliers removed!
+    temp_vector <- filter(remove_out, month == j, measurement == i)
+    ###Initialize an empty data frame
+    temp_df <- data.frame()
+    ###Loop through each flat 
+    for (k in 1:length(unique(temp_vector$flat_number))){
+      ###Create a temporary data frame - each column is the measured values for each flat
+      temp <- filter(temp_vector, flat_number == k)$measured_value
+      temp_df <- addToDF(temp_df, temp)}
+
+    ###Normalize across the flats
+    temp_normalize <- as.data.frame(normalize.quantiles(as.matrix(temp_df)))%>%
+      ###Add columns with the measurement and experiment to be certain there hasn't been any mix-ups
+      mutate(measurement = i, experiment= j)
+    ###Create a name to give the normalized data based on the measurement and experiment
+    temp_name <- paste(tolower(j), "_", i, "_normalize", sep = "")
+    ###Rename the columns
+    if(ncol(temp_normalize) == 6){
+      temp_normalize <- temp_normalize%>%
+        rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4)
+    }else{
+      temp_normalize <- temp_normalize%>%
+      rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4, flat_5 = V5)}
+    ###Assign the name to the data frame
+    assign(temp_name, temp_normalize)
+  }
+}
+
+
+###Create a loop for each measurement and experiment
+for (i in c("npq", "phi2", "leafarea")){
+  for (j in c("Dec", "Jan", "Feb")){
+    ###Filter to select each specific month and measured value
+    temp_vector <- filter(depi_all, month == j, measurement == i)
+    ###Initialize an empty data frame
+    temp_df <- data.frame()
+    ###Loop through each flat 
+    for (k in 1:length(unique(temp_vector$flat_number))){
+      ###Create a temporary data frame - each column is the measured values for each flat
+      temp <- filter(temp_vector, flat_number == k)$measured_value
+      temp_df <- addToDF(temp_df, temp)}
+    ###Normalize across the flats
+    temp_normalize <- as.data.frame(normalize.quantiles(as.matrix(temp_df)))%>%
+      ###Add columns with the measurement and experiment to be certain there hasn't been any mix-ups
+      mutate(measurement_verify = i, experiment_verify = j)
+    ###Create a name to give the normalized data based on the measurement and experiment
+    temp_name <- paste(tolower(j), "_", i, "_normalize", sep = "")
+    ###Rename the columns
+    if(ncol(temp_normalize) == 6){
+      temp_normalize <- temp_normalize%>%
+        rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4)
+    }else{
+      temp_normalize <- temp_normalize%>%
+      rename(flat_1 = V1, flat_2 = V2, flat_3 = V3, flat_4 = V4, flat_5 = 5)}
+    ###Assign the name to the data frame
+    assign(temp_name, temp_normalize)
+    ###Loop through each of the columns that have measured values for each flat
+    for (num in 1:(ncol(temp_normalize) - 2)){
+      ###Filter the relevant matching rows from the depi_all dataframe
+      temp_depi_information <- depi_all%>%
+            filter(measurement == unique(temp_normalize$measurement_verify), month ==  unique(temp_normalize$experiment_verify), flat_number == num)
+      ###Add the column with the normalized data to the depi subset
+      temp_merged <- cbind(temp_depi_information, na.omit(temp_normalize[num]))
+      ###Create a name for this data frame - based on the measurement, month, and flat
+      temp_name_final <- paste(temp_name, "_flat_", num, sep = "")
+
+      names(temp_merged)[length(names(temp_merged))] <- "normalized_value"
+      assign(temp_name_final, temp_merged)
+      
+    }
+  }
+}
+###Combine all seperate data frames
+quantile_normalize_all<- rbind(dec_leafarea_normalize_flat_1,
+      dec_leafarea_normalize_flat_2,
+      dec_leafarea_normalize_flat_3,
+      dec_leafarea_normalize_flat_4,
+      jan_leafarea_normalize_flat_1,
+      jan_leafarea_normalize_flat_2,
+      jan_leafarea_normalize_flat_3,
+      jan_leafarea_normalize_flat_4,
+      feb_leafarea_normalize_flat_1,
+      feb_leafarea_normalize_flat_2,
+      feb_leafarea_normalize_flat_3,
+      feb_leafarea_normalize_flat_4,
+      feb_leafarea_normalize_flat_5,
+      dec_npq_normalize_flat_1,
+      dec_npq_normalize_flat_2,
+      dec_npq_normalize_flat_3,
+      dec_npq_normalize_flat_4,
+      jan_npq_normalize_flat_1,
+      jan_npq_normalize_flat_2,
+      jan_npq_normalize_flat_3,
+      jan_npq_normalize_flat_4,
+      feb_npq_normalize_flat_1,
+      feb_npq_normalize_flat_2,
+      feb_npq_normalize_flat_3,
+      feb_npq_normalize_flat_4,
+      feb_npq_normalize_flat_5,
+      dec_phi2_normalize_flat_1,
+      dec_phi2_normalize_flat_2,
+      dec_phi2_normalize_flat_3,
+      dec_phi2_normalize_flat_4,
+      jan_phi2_normalize_flat_1,
+      jan_phi2_normalize_flat_2,
+      jan_phi2_normalize_flat_3,
+      jan_phi2_normalize_flat_4,
+      feb_phi2_normalize_flat_1,
+      feb_phi2_normalize_flat_2,
+      feb_phi2_normalize_flat_3,
+      feb_phi2_normalize_flat_4,
+      feb_phi2_normalize_flat_5)
+```
+
+Finally, create the .csv file:
+
+```{r}
+write.csv(quantile_normalize_all, file = "Clean_DEPI_Data.csv", row.names = FALSE)
+```
+
+

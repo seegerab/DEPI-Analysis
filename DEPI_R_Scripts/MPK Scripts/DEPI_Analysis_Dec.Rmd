@@ -58,7 +58,7 @@ library(viridis)
 Next, load in the data.
 
 ```{r load_depi_data}
-depi_data <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_data <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
 head(depi_data)
 ```
 
@@ -72,7 +72,7 @@ names(depi_data) <- c("individual_plant_metadata", "genotype", "line", "subline"
 Add a column with the full subline information:
 
 ```{r}
-indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+indiv_plant_metadata <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
 
 indiv_plant_metadata <- indiv_plant_metadata%>%
   select(V1,V5)%>%
@@ -857,9 +857,7 @@ Apply the cell_370_data_function to the December data, and add columns with the 
 cell_370_data_dec <- cell_370_data(add_day_col(dec_data))
 cell_370_data_dec <- add_number(cell_370_data_dec)
 cell_370_data_dec <- add_day_col(cell_370_data_dec)
-
 cell_370_data_dec$genotype <- reorder(cell_370_data_dec$genotype, cell_370_data_dec$number)
-
 ```
 
 ```{r dec_cell_370_loop}

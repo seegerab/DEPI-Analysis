@@ -58,7 +58,7 @@ library(viridis)
 Next, load in the data. This data is in a seperate query from the December and February data. I included all columns in both the individual_plant_metadata and the DEPI measurement files - for the other experiments, I did not include all of these columns. 
 
 ```{r load_depi_data}
-depi_data <-read.table("DEPI_Jan_Seeger_Final.txt", sep = ",", header = FALSE)
+depi_data <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/January_DEPI_Data.txt", sep = ",", header = FALSE)
 head(depi_data)
 ```
 

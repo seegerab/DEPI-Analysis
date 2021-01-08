@@ -649,7 +649,6 @@ selectionCoef$genotype <- reorder(selectionCoef$genotype, desc(selectionCoef$num
 
 geneticInteractions <- add_number(geneticInteractions)
 geneticInteractions$genotype <- reorder(geneticInteractions$genotype, desc(geneticInteractions$number))
-
 ```
 
 ```{r}

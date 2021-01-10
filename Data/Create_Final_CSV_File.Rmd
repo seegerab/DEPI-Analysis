@@ -128,7 +128,7 @@ addToDF <- function(df, v){
 
 ```{r}
 ###Read in the January Data
-depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_Jan_Seeger_Old.txt", sep = ",", header = FALSE)
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/January_DEPI_Data.txt", sep = ",", header = FALSE)
 ###Read in the December and February Data
 depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
 ###Add column names to depi_jan
@@ -173,6 +173,8 @@ dec_data <- add_day_col(dec_data)
 jan_data <- add_day_col(jan_data)
 feb_data <- add_day_col(feb_data)
 
+jan_data$measured_value <- as.numeric(jan_data$measured_value)
+
 ###Shift all NPQ values so the minimum is 0
 dec_data$measured_value[dec_data$measurement == "npq"] <- (dec_data$measured_value[dec_data$measurement == "npq"])+abs(min((filter(dec_data, measurement == "npq"))$measured_value))
 
@@ -196,6 +198,8 @@ depi_all <- as.data.frame(depi_all%>%
 ###Rename size and growth to be leafarea
 depi_all$measurement[depi_all$measurement == "size"] <- "leafarea"
 depi_all$measurement[depi_all$measurement == "growth"] <- "leafarea"
+
+depi_all$time_point <- as.numeric(depi_all$time_point)
 ```
 
 # Remove Outliers
@@ -330,7 +334,7 @@ quantile_normalize_all<- rbind(dec_leafarea_normalize_flat_1,
 Finally, create the .csv file:
 
 ```{r}
-write.csv(quantile_normalize_all, file = "Clean_DEPI_Data.csv", row.names = FALSE)
+write.csv(quantile_normalize_all, file = "Clean_DEPI_Data_V2.csv", row.names = FALSE)
 ```
 
 

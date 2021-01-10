@@ -49,7 +49,7 @@ library(lemon)
 # Load in Cleaned Data
 
 ```{r}
-depi_data <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Clean_DEPI_Data.csv", sep = ",", header = TRUE)
+depi_data <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Clean_DEPI_Data_V2.csv", sep = ",", header = TRUE)
 ```
 
 # Functions 
@@ -147,63 +147,108 @@ cell_371_data <- function (data_frame) {
 
 ```
 
-
 # Selection Coefficient Calculations
 
 ```{r}
 selectionCoef<- data.frame(genotype = rep(NA, 0), 
                                   SelectionCoefficient = rep(NA, 0),
                                   Experiment = rep(NA, 0),
-                                  Measurement = rep(NA, 0))
+                                  Measurement = rep(NA, 0),
+                                  Time_Point = rep(NA, 0))
 
-for(e in c("Dec", "Jan", "Feb")){
-  for (m in c("phi2", "leafarea", "phi2")){
+temp_month <- "Jan"
+temp_measurement <- "phi2"
+
+
+temp_data <- depi_data%>%
+      filter(month == temp_month, measurement == temp_measurement)
+
+for(temp_month in c("Dec", "Jan", "Feb")){
+  for (temp_measurement in c("phi2", "npq", "leafarea")){
     temp_data <- depi_data%>%
-      filter(month == e, measurement == m)
-    temp_nrow <- 38 * length(unique(temp_data$time_point))
-    for (i in unique(temp_data$time_point))
-    ###Create an empty data frame to fill with the information and calcuations:
-    selectionCoefTmp <- data.frame(genotype = rep(NA, temp_nrow), 
-                                   SelectionCoefficient = rep(NA, temp_nrow),
-                                   Experiment = rep(NA, temp_nrow), 
-                                   Measurement = rep(NA, temp_nrow),
-                                   Time_Point = rep(NA, temp_nrow))
-    count <- 1
-    for (g in unique(temp_data$genotype)){
-      fm <- mean(filter(temp_data, genotype == g, month == e, measurement == m, time_point == i)$normalized_value)
-      fwt <- mean(filter(temp_data, genotype == "Col0", month == e, measurement == m, time_point == i)$normalized_value)
-      TempSelectionCoef <- (fm - fwt) / fwt
-      selectionCoefTmp[count, 1] <- g
-      selectionCoefTmp[count, 2] <- TempSelectionCoef
-      selectionCoefTmp[count, 3] <- e
-      selectionCoefTmp[count, 4] <- m
-      selectionCoefTmp[count, 5] <- i
-      count <- count + 1
+      filter(month == temp_month, measurement == temp_measurement)
+    temp_n_row <- ifelse(temp_month == "Dec", 37, 38)
+    for (i in unique(temp_data$time_point)){
+      temp_data_2 <- filter(temp_data, time_point == i)
+      selectionCoefTmp <- data.frame(genotype = rep(NA, temp_n_row), 
+                                       SelectionCoefficient = rep(NA, temp_n_row),
+                                       Experiment = rep(NA, temp_n_row), 
+                                       Measurement = rep(NA, temp_n_row),
+                                      Time_Point = rep(NA, temp_n_row))
+      count <- 1
+      for (g in unique(temp_data$genotype)){
+          fm <- mean(filter(temp_data_2, genotype == g, month == temp_month, measurement == temp_measurement, time_point == i)$normalized_value)
+          fwt <- mean(filter(temp_data_2, genotype == "Col0", month == temp_month, measurement == temp_measurement, time_point == i)$normalized_value)
+          selectionCoefTmp[count, 1] <- g
+          selectionCoefTmp[count, 2] <- (fm - fwt) / fwt
+          selectionCoefTmp[count, 3] <- temp_month
+          selectionCoefTmp[count, 4] <- temp_measurement
+          selectionCoefTmp[count, 5] <- i
+          
+          count <- count + 1
+          }
+      selectionCoef <- rbind(selectionCoef, selectionCoefTmp)
     }
-    selectionCoef <- rbind(selectionCoef, selectionCoefTmp)
+  }
+}
+```
+
+Pick a point and calculate the selection coefficient outside the loop to ensure that the loop is correct:
+
+```{r}
+m_test_1 <- mean(filter(depi_data, month == "Dec", measurement == "phi2", time_point == "0", genotype == "mpk1")$normalized_value)
+wt_test_1 <- mean(filter(depi_data, month == "Dec", measurement == "phi2", time_point == "0", genotype == "Col0")$normalized_value)
+
+((m_test_1 - wt_test_1) / wt_test_1)
+
+filter(selectionCoef, Experiment == "Dec", Measurement == "phi2", Time_Point == "0", genotype == "mpk1")
+```
+# Selection Coefficient Plots
+
+```{r}
+selectionCoef <- add_number(selectionCoef)
+selectionCoef$genotype <- reorder(selectionCoef$genotype, selectionCoef$number)
+
+selectionCoef <- add_day_col(selectionCoef)
+```
+
+```{r}
+for (temp_month in c("Dec", "Jan", "Feb")){
+  for (temp_measurement in c("phi2", "npq", "leafarea")){
+    temp_plot_data <- filter(selectionCoef, Experiment == temp_month, Measurement == temp_measurement)
+    
+    temp_title <- ifelse(temp_month == "Dec", "December", ifelse(temp_month == "Jan", "January", "February"))
+    
+    temp_lower_bound <- round(min(temp_plot_data$SelectionCoefficient) - 0.05, 2)
+    
+    temp_upper_bound <- round(max(temp_plot_data$SelectionCoefficient) + 0.05, 2)
+    
+    plot <- ggplot(data = temp_plot_data, aes(x = Time_Point, y = genotype, fill = SelectionCoefficient)) + 
+      labs(fill = "Selection Coefficients", x = "Hours", y = NULL, title = paste(temp_title, ":", temp_measurement, " Selection Coefficient", sep = ""))+
+      geom_tile(width = ifelse(temp_measurement == "leafarea", 16, 10) , height = 30)+
+      facet_grid(genotype ~ day, scales = "free", switch = "y")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 50)+
+      theme(strip.background.y = element_blank(),
+            strip.text.y = element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            panel.spacing=unit(0, "lines"))+
+      scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(temp_lower_bound, temp_upper_bound), breaks = c(temp_lower_bound, 0, temp_upper_bound), labels = c(as.character(temp_lower_bound), "0", as.character(temp_upper_bound)))
+    
+    print(plot)
+   
   }
 }
 
-selectionCoef <- selectionCoef%>%
-  arrange(Measurement, genotype)
 ```
 
-
-Tomorrow, see if this works...
-
-```{r}
-out <- data.frame()
-for (i in unique(filter(depi_data, genotype != "Col0")$genotype)){
-  temp <- depi_data%>%
-    group_by(genotype, measurement, time_point, month)%>%
-    mutate(SelectionCoef = median((normalized_value[genotype == i] - normalized_value[genotype == "Col0"]) / normalized_value[genotype == "Col0"]))
-           
-  out <- rbind(as.data.frame(temp), out)}
-
-}
-```
 
 # Epistasis Calculations
+
+Do this on Monday.
+Also, figure out why January is only plotting day 7 for leafarea, but all days for the other January measurements. 
 
 ```{r eval = FALSE}
 all_double_mutants = list()
@@ -275,46 +320,6 @@ for(e in c("Dec", "Jan", "Feb")){
 }
 
 ```
-
-
-# Selection Coefficient Visualizations 
-
-First, include a column of "number" and "number_2" 
-
-```{r}
-selectionCoef <- add_number(selectionCoef)
-selectionCoef$genotype <- reorder(selectionCoef$genotype, desc(selectionCoef$number))
-selectionCoef <- add_day_col(selectionCoef)
-
-```
-
-
-```{r}
-temp_plot <- selectionCoef%>%
-  filter(Experiment == "Jan", Measurement == "phi2")
-
-temp_upper_bound <- round(max(temp_plot$SelectionCoefficient) + 0.05, 2)
-temp_lower_bound <- round(min(temp_plot$SelectionCoefficient) - 0.05, 2)
-
-
-ggplot(data = temp_plot, aes(x = Time_Point , y = genotype, fill = SelectionCoefficient )) + 
-  labs(fill = "Selection Coefficient", x = "Hours", y = NULL, title = "January Day 3 Selection Coefficients")+
-  geom_tile(width = 10, height = 10)+
-  facet_grid(genotype ~ day, scales = "free", switch = "y")+
-  theme_tufte(base_family = "Calibri",
-               base_size = 50)+
-  theme(strip.background.y = element_blank(),
-        strip.text.y = element_blank(),
-        axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(),
-        panel.spacing=unit(0, "lines"))+
-  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(temp_lower_bound, temp_upper_bound), breaks = c(temp_lower_bound, 0,  temp_upper_bound), labels = c(as.character(temp_lower_bound), "0", as.character(temp_upper_bound)))
-
-```
-
-
-
 
 # Genetic Interactions Visualizations 
 

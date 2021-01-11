@@ -128,7 +128,7 @@ addToDF <- function(df, v){
 
 ```{r}
 ###Read in the January Data
-depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/January_DEPI_Data.txt", sep = ",", header = FALSE)
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/January_DEPI_Data.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
 ###Read in the December and February Data
 depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
 ###Add column names to depi_jan

@@ -48,7 +48,6 @@ library(extrafont)
 ###Routliers is used for outliersmad to find outliers
 library(Routliers)
 library(stringi)
-library(wesanderson)
 library(viridis)
 library(reshape2)
 library(sm)

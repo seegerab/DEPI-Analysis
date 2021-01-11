@@ -59,32 +59,14 @@ add_day_col <- function(df){
   df$Time_Point <- as.numeric(df$Time_Point)
   out <- df%>%
   mutate(day = case_when(
-  (df$Time_Point < 24)~ "1",
-  (df$Time_Point >= 24 & df$Time_Point < 48)~ '2',
-  (df$Time_Point >= 48 & df$Time_Point < 72)~ '3',
-  (df$Time_Point >= 72 & df$Time_Point < 96)~ '4',
-  (df$Time_Point >= 96 & df$Time_Point < 120)~ '5',
-  (df$Time_Point >= 120 & df$Time_Point < 144)~ '6',
-  (df$Time_Point >= 144 & df$Time_Point < 168)~ '7',
-  (df$Time_Point >= 168 & df$Time_Point < 192)~ '8',
-  (df$Time_Point >= 192 & df$Time_Point < 216)~ '9',
-  (df$Time_Point >= 216 & df$Time_Point < 240)~ '10',
-  (df$Time_Point >= 240 & df$Time_Point < 264)~ '11',
-  (df$Time_Point >= 264 & df$Time_Point < 288)~ '12',
-  (df$Time_Point >= 288 & df$Time_Point < 312)~ '13',
-  (df$Time_Point >= 312 & df$Time_Point < 336)~ '14',
-  (df$Time_Point >= 336 & df$Time_Point < 360)~ '15',
-  (df$Time_Point >= 360 & df$Time_Point < 384)~ '16',
-  (df$Time_Point >= 384 & df$Time_Point < 408)~ '17',
-  (df$Time_Point >= 408 & df$Time_Point < 432)~ '18',
-  (df$Time_Point >= 432 & df$Time_Point < 456)~ '19',
-  (df$Time_Point >= 456 & df$Time_Point < 480)~ '20',
-  (df$Time_Point >= 480 & df$Time_Point < 504)~ '21',
-  (df$Time_Point >= 504 & df$Time_Point < 528)~ '22',
-  (df$Time_Point >= 528 & df$Time_Point < 552)~ '23',
-  (df$Time_Point >= 552 & df$Time_Point < 576)~ '24',
-  (df$Time_Point >= 576 & df$Time_Point < 600)~ '25'
-  ))
+  (df$Time_Point <= 15)~ "1",
+  (df$Time_Point >= 24 & df$Time_Point <= 39.5)~ '2',
+  (df$Time_Point >= 48 & df$Time_Point <= 63.7)~ '3',
+  (df$Time_Point >= 72 & df$Time_Point < 87.01)~ '4',
+  (df$Time_Point >= 96 & df$Time_Point < 111.8)~ '5',
+  (df$Time_Point >= 120 & df$Time_Point <= 135)~ '6',
+  (df$Time_Point >= 144 & df$Time_Point <= 159)~ '7',
+  (df$Time_Point >= 168 & df$Time_Point < 192)~ '8'))
   out$day <- as.integer(out$day)
   return(out)}
 ```
@@ -257,7 +239,7 @@ for (temp_measurement in c("phi2", "npq")){
 
 # Epistasis Calculations
 
-```{r eval = FALSE}
+```{r }
 all_double_mutants = list()
 for (gen in unique(depi_data$genotype)) {
   if (str_detect(gen, "-") == T) {
@@ -328,8 +310,6 @@ for(e in c("Dec", "Jan", "Feb")){
 }
 
 ```
-
-Remove any rows with NA - this will happen when the mpk5-17 genotype isn't in the experiment:
 
 
 # Epistasis Visualizations - All

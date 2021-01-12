@@ -233,7 +233,7 @@ Create heat maps for the adjusted p-values.
 ##### ----- Dec p-value heat map - NPQ ------
 ggplot(data = december_npq, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   #scale_x_continuous(breaks = 
   #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
@@ -251,7 +251,7 @@ ggplot(data = december_npq, aes(x = time_point, y = genotype, fill = bin)) +
 ##### ----- Dec p-value heat map - phi2 ------
 ggplot(data = december_phi2, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: Phi2 P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   theme_tufte(base_family = "Calibri",
               base_size = 50)+
@@ -323,7 +323,7 @@ Create heat maps for the adjusted p-values.
 ##### ----- January p-value heat map - NPQ ------
 ggplot(data = january_npq, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "January: NPQ P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   #scale_x_continuous(breaks = 
   #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
@@ -341,7 +341,7 @@ ggplot(data = january_npq, aes(x = time_point, y = genotype, fill = bin)) +
 ##### ----- January p-value heat map - phi2 ------
 ggplot(data = january_phi2, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "January: Phi2 P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   theme_tufte(base_family = "Calibri",
               base_size = 50)+
@@ -357,7 +357,7 @@ ggplot(data = january_phi2, aes(x = time_point, y = genotype, fill = bin)) +
 ##### ----- January p-value heat map - phi2 ------
 ggplot(data = january_leafarea, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "January: Leafarea P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   theme_tufte(base_family = "Calibri",
               base_size = 50)+
@@ -425,7 +425,7 @@ february_phi2$genotype <- reorder(february_phi2$genotype, february_phi2$number)
 ##### ----- February p-value heat map - NPQ ------
 ggplot(data = february_npq, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "February: NPQ P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   #scale_x_continuous(breaks = 
   #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
@@ -443,7 +443,7 @@ ggplot(data = february_npq, aes(x = time_point, y = genotype, fill = bin)) +
 ##### ----- February p-value heat map - phi2 ------
 ggplot(data = february_phi2, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "February: Phi2 P-value, Corrected")+
-  geom_tile(width = 10 , height = 20)+
+  geom_tile(height = 1.6, width = 1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   theme_tufte(base_family = "Calibri",
               base_size = 50)+

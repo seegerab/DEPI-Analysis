@@ -85,6 +85,79 @@ These will be embedded in .Rmd files.
 
 # DEPI_Figures
 
- 
+Note that all the figures in this folder are before quantile normalization.
+
+## Dec B1B3 Figures
+
+P-value heat maps, log two fold change heat maps, and line plots for the B1B3 gene family from the December experiment.
+
+## Dec Ftsz Figures
+
+P-value heat maps, log two fold change heat maps, and line plots for the Ftsz gene family.
+
+## December - heat maps, all
+
+The log two fold change heat maps that include all genotypes. There are three plots - one for each measurement. 
+
+## December - individual heat maps
+
+This folder contains three folders, one for each measurement. In each folder are the log two fold change heat maps for each combination of single and double mutants.
+
+## December - line graph
+
+Line plots for each combination of single and double mutants. These line plots are faceted to include all three measurements on each plot. 
+
+## December - p-value
+
+P-value heat maps for each measurement, both corrected and uncorrected.
+
+## Feb B1B3 Figures
+
+P-value heat maps, log two fold change heat maps, and line plots for the B1B3 gene family from the February experiment.
+
+## Feb Ftsz Figures
+
+P-value heat maps, log two fold change heat maps, and line plots for the Ftsz gene family from the February experiment.
+
+## February - heat maps, all
+
+The log two fold change heat maps that include all genotypes. There are three plots - one for each measurement from the February experiment.
+
+## February - individual heat maps
+
+This folder contains three folders, one for each measurement. In each folder are the log two fold change heat maps for each combination of single and double mutants from the February experiment.
+
+## February - line graph
+
+Line plots for each combination of single and double mutants. These line plots are faceted to include all three measurements on each plot from the February experiment. 
+
+## February - p-value
+
+P-value heat maps for each measurement, both corrected and uncorrected from the February experiment.
+
+## Jan B1B3 Figures
+
+P-value heat maps, log two fold change heat maps, and line plots for the B1B3 gene family from the January experiment.
+
+## Other
+
+Density plots of the npq values for December and February which shows the amount of npq measured value that are negative for each experiment.
+
+## VP
+
+Violin plots comparing the December and February experiment distribution of each measured value for a range of genotypes compared to wild type. Note that these plots are created for each day, which could lead to problems for the flucuating days.
+
+Also includes subfolders, and plots not in folders, all of which contain further violin plots.
+
+
+
+
+
+
+
+
+
+
+
 
 

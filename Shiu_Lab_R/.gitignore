@@ -1,0 +1,10 @@
+*.txt
+*.png
+*.tiff
+*.Rproj.user
+*.Rhistory
+*.RData
+*.accdb
+*.html
+
+.Rproj.user

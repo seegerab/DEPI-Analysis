@@ -498,10 +498,10 @@ This is the CORRECT heat map:
 ##### ----- Dec p-value heat map - NPQ ------
 ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")+
-  geom_tile(height = 1.6, width = 1)+
+  geom_tile(height = 1.75, width = 1.2)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   theme_tufte(base_family = "Calibri",
-              base_size = 20)+
+              base_size = 50)+
   theme(strip.background.y = element_blank(),
         strip.text.y = element_blank(),
         axis.title.x=element_blank(),
@@ -509,7 +509,7 @@ ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) +
         axis.ticks.x=element_blank(),
         panel.spacing=unit(0, "lines"))+
   scale_fill_manual(values = c("red", "orange", "black"))
-ggsave("Dec_NPQ_Correct_No_QN.png", scale = 2, path = "C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Updated_Plots", limitsize = FALSE)
+# ggsave("Dec_NPQ_Correct_No_QN.png", scale = 2, path = "C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Updated_Plots", limitsize = FALSE)
 
 
 ```
@@ -521,10 +521,10 @@ ggplot(data = dec_npq_adj_2, aes(x = time_point, y = genotype, fill = bin))+
   geom_tile()+
   scale_fill_manual(values = c("red", "orange", "black"))+
   theme_tufte(base_family = "Calibri",
-              base_size = 20)+
+              base_size = 50)+
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")
 
-ggsave("Dec_NPQ_Correct_No_QN_V2.png", scale = 2, path = "C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Updated_Plots", limitsize = FALSE)
+# ggsave("Dec_NPQ_Correct_No_QN_V2.png", scale = 2, path = "C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Updated_Plots", limitsize = FALSE)
 
 
 

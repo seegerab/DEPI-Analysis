@@ -10,7 +10,14 @@
 
 * Re-download the January data from the access database to make sure that the precision of the measured values and time points is correct.
 
-
 * Message Siobhan about where to save big .txt files (maybe in the HPC?)
+
+* A write-up of the steps for processing the data
+
+* Modify p-value heat map to include the gray column
+
+
+
+
 
 

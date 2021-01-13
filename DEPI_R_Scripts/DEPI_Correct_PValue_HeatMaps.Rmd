@@ -474,6 +474,25 @@ This is the INCORRECT heat map:
 ##### ----- Dec p-value heat map - NPQ ------
 ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")+
+  geom_tile(width = 1 , height = 1)+
+  facet_grid(genotype ~ day, scales = "free", switch = "y")+
+  #scale_x_continuous(breaks = 
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,
+  #120,135,144,159,168,183,192,207,216,231,240,255,264,279),0))+
+  theme_tufte(base_family = "Calibri",
+              base_size = 10)+
+  theme(strip.background.y = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.spacing=unit(0, "lines"))+
+  scale_fill_manual(values = c("red", "orange", "black"))
+#ggsave("dec_npq_corrected.png", scale = 2, path = "C:/Users/Joan Seeger/Documents/Shiu Lab - R/Current/Visualizations")
+
+##### ----- Dec p-value heat map - NPQ ------
+ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) + 
+  labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")+
   geom_tile(width = 10 , height = 20)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   #scale_x_continuous(breaks = 
@@ -493,12 +512,82 @@ ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) +
 
 This is the CORRECT heat map:
 
+First, create a new data frame for these plots. This is because the time points for day 4 skips a time point, results in a column of all white:
+
+```{r}
+unique(filter(dec_data, dec_data$day == 4)$time_point)
+```
+So, for time point 73, I need to include a column of gray, to show that this data is missing, and isn't denoting a change in day. 
+
+To do this, I will introduce dummy data for this time point for each genotype, and specify this to be coded as gray.
+
+I will let this dummy value be "No Data". This is convinient, because it will show in the legend.
+
+
+```{r}
+final_plot_data <- dec_npq_adj
+
+dummy_data_frame <- data.frame(time_point = rep(73, 36),
+                               genotype = unique(dec_npq_adj$genotype),
+                               measurement = rep("npq", 36),
+                               day = rep(4, 36),
+                               n_wt = rep(NA, 36),
+                               n_genotype = rep(NA, 36),
+                               effect = rep(NA, 36),
+                               effect_size = rep(NA, 36),
+                               type = rep("p_adj", 36),
+                               p = rep(2, 36),
+                               number = (dec_npq_adj%>%filter(time_point == 1))$number,
+                               number_2 = rep(NA, 36),
+                               bin = rep("No Data", 36)
+                               
+                               )
+
+final_plot_data <- rbind(final_plot_data, dummy_data_frame)
+
+```
+
+```{r}
+final_plot_data$bin <- as.factor(final_plot_data$bin)
+
+final_plot_data$bin <- relevel(final_plot_data$bin, 'p<0.01', first = TRUE)
+final_plot_data$bin <- relevel(final_plot_data$bin, 'No Data', first = FALSE)
+
+```
+
+
+```{r}
+plot_data <- dec_data%>%
+  filter(genotype %in% c("mpk1-17", "mpk1", "mpk17", "Col0"), measurement == "npq")%>%
+  group_by(genotype, time_point)%>%
+  summarize(med = median(measured_value))
+
+plot <- ggplot(data = plot_data, aes(x = time_point, y = med))+
+    geom_line(aes(color = genotype), size = 1)+
+    # facet_rep_grid(~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+    labs(x = "Hours", y = NULL)+
+    theme_tufte(base_family = "Calibri",
+                base_size = 20)+
+    theme(strip.background.x = element_blank(),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.border = element_rect(color = "black", fill = NA, size = 1),
+          axis.line=element_line(),
+          panel.spacing = unit(1, "lines"))+
+  #scale_x_continuous(breaks    
+  #round(c(0,15,24,39.5,48,63.7,72,87,96,112,120,135,144,
+  #159,168,183,192,207,216,231,240,255,264,279),0))+
+    scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+```
+
+
 
 ```{r dec_p_value_heat_maps_adj}
 ##### ----- Dec p-value heat map - NPQ ------
-ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) + 
+ggplot(data = final_plot_data, aes(x = time_point, y = genotype, fill = bin)) + 
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")+
-  geom_tile(height = 1.75, width = 1.2)+
+  geom_tile(height = 2, width = 1.1)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
   theme_tufte(base_family = "Calibri",
               base_size = 50)+
@@ -508,18 +597,18 @@ ggplot(data = dec_npq_adj, aes(x = time_point, y = genotype, fill = bin)) +
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
         panel.spacing=unit(0, "lines"))+
-  scale_fill_manual(values = c("red", "orange", "black"))
+  scale_fill_manual(values = c("gray", "red", "orange", "black"))
 # ggsave("Dec_NPQ_Correct_No_QN.png", scale = 2, path = "C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Updated_Plots", limitsize = FALSE)
 
 
 ```
 ```{r}
-dec_npq_adj_2 <- dec_npq_adj
-dec_npq_adj_2$genotype <- reorder(dec_npq_adj_2$genotype, dec_npq_adj_2$number * -1)
+final_plot_data_2 <- final_plot_data
+final_plot_data_2$genotype <- reorder(final_plot_data_2$genotype, final_plot_data_2$number * -1)
 
-ggplot(data = dec_npq_adj_2, aes(x = time_point, y = genotype, fill = bin))+
-  geom_tile()+
-  scale_fill_manual(values = c("red", "orange", "black"))+
+ggplot(data = final_plot_data_2, aes(x = time_point, y = genotype, fill = bin))+
+  geom_tile(height = 1, width = 1.1)+
+  scale_fill_manual(values = c("gray", "red", "orange", "black"))+
   theme_tufte(base_family = "Calibri",
               base_size = 50)+
   labs(fill = "P-Value, \nwith FDR Correction", x = "Hours", y = NULL, title = "December: NPQ P-value, Corrected")

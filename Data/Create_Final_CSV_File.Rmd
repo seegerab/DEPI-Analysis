@@ -126,12 +126,21 @@ addToDF <- function(df, v){
 # Load Data
 
 ```{r}
-###Read in the January Data
-depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/January_DEPI_Data.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
-###Read in the December and February Data
-depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+###Read in the January Data - this excludes growth, days 1 through 7
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Correct_January_Created_Jan132021.csv", sep = ",", header = TRUE, stringsAsFactors = FALSE)
 ###Add column names to depi_jan
 names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
+###Read in the separate data frame with January growth days 1 through 7
+depi_jan_growth <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Jan_Growth_Days_1_7.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
+
+###Add column names to depi_jan_growth
+names(depi_jan_growth) <- c("individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number", "cell_number", "row_number", "column_number", "border", "treatment", "measurement_ID", "plant_ID","DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement")
+
+depi_jan <- rbind(depi_jan_growth, depi_jan)
+
+###Read in the December and February Data
+depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+
 ###Add column names to depi_dec_feb
 names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
 ###Read in the individual plant metadata, because we need the full subline information to select the correct sublines of Col0
@@ -333,7 +342,7 @@ quantile_normalize_all<- rbind(dec_leafarea_normalize_flat_1,
 Finally, create the .csv file:
 
 ```{r}
-write.csv(quantile_normalize_all, file = "Clean_DEPI_Data_V2.csv", row.names = FALSE)
+write.csv(quantile_normalize_all, file = "Clean_DEPI_Data.csv", row.names = FALSE)
 ```
 
 

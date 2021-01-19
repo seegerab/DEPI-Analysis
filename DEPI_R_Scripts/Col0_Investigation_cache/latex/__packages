@@ -1,0 +1,13 @@
+base
+knitr
+formatR
+dplyr
+ggplot2
+viridisLite
+viridis
+lemon
+ggthemes
+extrafont
+Rcpp
+RcppZiggurat
+Rfast

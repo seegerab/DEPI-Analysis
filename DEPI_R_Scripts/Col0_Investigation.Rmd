@@ -1,0 +1,317 @@
+---
+title: "Wild Type Investigations"
+author: "Abigail Seeger"
+date: "1/18/2021"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    # fig_height: 25
+    # fig_width: 25
+  html_document:
+    # fig_height: 25
+    # fig_width: 25
+    highlight: tango
+    number_sections: yes
+    theme: paper
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 4
+    toc_float: yes
+
+---
+
+```{r include =FALSE}
+library(knitr)
+library(formatR)
+
+knitr::opts_chunk$set(message=FALSE, echo = TRUE, warning = FALSE, dev = "cairo_pdf",
+tidy.opts=list(width.cutoff=40),tidy=TRUE, cache = TRUE) 
+
+```
+
+The purpose of this document is to include all information for wild type in one place. This is because the log two fold change values seem opposite for many genotypes depending on the experiment - either December, January, or February. One potential reason for this is that the Col0 plants may have started at different sizes.
+
+```{r}
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(lemon)
+library(ggthemes)
+library(extrafont)
+library(Rfast)
+library(formatR)
+```
+
+
+# Load in the Data
+
+I will use the data that has not been quantile normalized, but the outliers have been removed. 
+
+Here is the data frame that I am using. This has already been cleaned, and I saved the data in a .csv file:
+
+```{r}
+depi_data <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Clean_DEPI_Data.csv", sep = ",", header = TRUE)
+head(depi_data)
+```
+Here are the columns in the data frame:
+
+```{r}
+colnames(depi_data)
+```
+Note that moving forward, I will use the measured_value column, not the normalized value column.
+
+# Initial Information
+
+Here are the number of Col0 plants per experiment:
+
+```{r}
+depi_data%>%
+  group_by(month)%>%
+  filter(genotype == "Col0")%>%
+  summarize(Number_Of_Plants = length(unique(individual_plant_metadata)))
+
+```
+
+Here are the summary statistics for Col0 at the start of each experiment:
+
+```{r}
+depi_data%>%
+  group_by(month, measurement)%>%
+  filter(genotype == "Col0", time_point == "0")%>%
+  summarize(Mean = mean(measured_value),
+            Median = median(measured_value),
+            Standard_Deviation = sd(measured_value),
+            Max = max(measured_value),
+            Min = min(measured_value))%>%
+  arrange(measurement)
+```
+
+Here are the summary statistics for all other genotypes:
+
+```{r}
+depi_data%>%
+  group_by(month, measurement)%>%
+  filter(genotype != "Col0", time_point == "0")%>%
+  summarize(Mean = mean(measured_value),
+            Median = median(measured_value),
+            Standard_Deviation = sd(measured_value),
+            Max = max(measured_value),
+            Min = min(measured_value))%>%
+  arrange(measurement)
+```
+
+
+
+```{r}
+plot_data <- depi_data%>%
+  filter(time_point == 0)
+
+plot_data$Classification <- ifelse(plot_data$genotype == "Col0", "Col0", "Other")
+
+ggplot(data = plot_data, aes(x = genotype, y = measured_value, fill = Classification))+
+  geom_boxplot()+
+  facet_grid(measurement ~ month, scales = "free")+
+  labs(x = "Genotype", y = "Measured Value")+
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank())+
+  scale_fill_viridis_d(option = "D")
+```
+
+Melissa noted that the behavior of mpk16 is different depending on the month of the experiment.
+
+Create plot data:
+
+```{r}
+plot_data_npq <- depi_data%>%
+  filter(genotype %in% c("Col0", "mpk16"))%>%
+  group_by(time_point, month, genotype)%>%
+  filter(measurement == "npq")%>%
+  mutate(mean = mean(measured_value),
+         sd = sd(measured_value),
+         month = factor(month, levels = c("Dec", "Jan", "Feb")))%>%
+  mutate(upper = mean + sd,
+         lower = mean - sd)
+
+
+plot_data_phi2 <- depi_data%>%
+  filter(genotype %in% c("Col0", "mpk16"))%>%
+  group_by(time_point, month, genotype)%>%
+  filter(measurement == "phi2")%>%
+  mutate(mean = mean(measured_value),
+         sd = sd(measured_value),
+         month = factor(month, levels = c("Dec", "Jan", "Feb")))%>%
+  mutate(upper = mean + sd,
+         lower = mean - sd)
+
+plot_data_leafarea <- depi_data%>%
+  filter(genotype %in% c("Col0", "mpk16"))%>%
+  group_by(time_point, month, genotype)%>%
+  filter(measurement == "leafarea")%>%
+  mutate(mean = mean(measured_value),
+         sd = sd(measured_value),
+         month = factor(month, levels = c("Dec", "Jan", "Feb")))%>%
+  mutate(upper = mean + sd,
+         lower = mean - sd)
+
+
+```
+
+## NPQ 
+
+```{r}
+ggplot(data = plot_data_npq, aes(x = time_point, y = mean))+
+      geom_line(aes(color = genotype), size = 1)+
+      facet_rep_grid(month ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+      labs(x = "Hours", y = NULL, title = "Mean NPQ, with Standard Deviation")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 10)+
+      geom_ribbon(aes(ymin = lower, ymax = upper, fill = genotype), alpha = 0.25)+
+      #geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = .2)+
+      theme(strip.background.x = element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            panel.border = element_rect(color = "black", fill = NA, size = 1),
+            axis.line=element_line(),
+            panel.spacing = unit(1, "lines"))+
+      scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+```
+```{r}
+ggplot(data = plot_data_npq, aes(x = time_point, y = sd))+
+      geom_line(aes(color = genotype), size = 1)+
+      facet_rep_grid(month ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+      labs(x = "Hours", y = NULL, title = "NPQ Standard Deviation")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 10)+
+      theme(strip.background.x = element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.ticks.x=element_blank(),
+                  panel.border = element_rect(color = "black", fill = NA, size = 1),
+                  axis.line=element_line(),
+                  panel.spacing = unit(1, "lines"))+
+            scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+
+```
+
+There are some patterns here:
+
+* Generally, mpk16 is more variable than Col0 in January, but the genotypes have roughly the same variability in the other experiments
+
+* Flucuating and sinusoidal light days have higher variability
+
+* February has less variability than both December and January
+
+## Phi2
+
+```{r}
+ggplot(data = plot_data_phi2, aes(x = time_point, y = mean))+
+      geom_line(aes(color = genotype), size = 1)+
+      facet_rep_grid(month ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+      labs(x = "Hours", y = NULL, title = "Mean Phi2, with Standard Deviation")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 10)+
+      geom_ribbon(aes(ymin = lower, ymax = upper, fill = genotype), alpha = 0.25)+
+      #geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = .2)+
+      theme(strip.background.x = element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            panel.border = element_rect(color = "black", fill = NA, size = 1),
+            axis.line=element_line(),
+            panel.spacing = unit(1, "lines"))+
+      scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+```
+
+
+```{r}
+ggplot(data = plot_data_phi2, aes(x = time_point, y = sd))+
+      geom_line(aes(color = genotype), size = 1)+
+      facet_rep_grid(month ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+      labs(x = "Hours", y = NULL, title = "Phi2 Standard Deviation")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 10)+
+      theme(strip.background.x = element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.ticks.x=element_blank(),
+                  panel.border = element_rect(color = "black", fill = NA, size = 1),
+                  axis.line=element_line(),
+                  panel.spacing = unit(1, "lines"))+
+            scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+
+```
+
+Some observations 
+
+* January has much, much higher standard deviation than the other two months
+
+* For December and Februrary, mpk16 has less variability than Col0
+
+* For January, mpk16 has more variability than Col0
+
+## leafarea
+
+```{r}
+ggplot(data = plot_data_leafarea, aes(x = time_point, y = mean))+
+      geom_line(aes(color = genotype), size = 1)+
+      facet_rep_grid(month ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+      labs(x = "Hours", y = NULL, title = "Mean Leafarea, with Standard Deviation")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 10)+
+      geom_ribbon(aes(ymin = lower, ymax = upper, fill = genotype), alpha = 0.25)+
+      #geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = .2)+
+      theme(strip.background.x = element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            panel.border = element_rect(color = "black", fill = NA, size = 1),
+            axis.line=element_line(),
+            panel.spacing = unit(1, "lines"))+
+      scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+```
+
+
+```{r}
+ggplot(data = plot_data_leafarea, aes(x = time_point, y = sd))+
+      geom_line(aes(color = genotype), size = 1)+
+      facet_rep_grid(month ~ day, scales = "free" , switch = "y", repeat.tick.labels = FALSE)+
+      labs(x = "Hours", y = NULL, title = "Leafarea Standard Deviation")+
+      theme_tufte(base_family = "Calibri",
+                  base_size = 10)+
+      theme(strip.background.x = element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.ticks.x=element_blank(),
+                  panel.border = element_rect(color = "black", fill = NA, size = 1),
+                  axis.line=element_line(),
+                  panel.spacing = unit(1, "lines"))+
+            scale_color_viridis_d(begin = 0, end = 1, option = 'viridis', aesthetics = c("colour", "fill"))
+
+```
+
+Some observations:
+
+* But, for day 7, December and February have more variability in Col0, whereas for January, mpk16 has much more variability than Col0
+
+* The plants are much bigger in January
+
+# Minimum leafarea sizes for January
+
+```{r}
+depi_data%>%
+  filter(month == "Jan", measurement == "leafarea", time_point == "0")%>%
+  group_by(genotype)%>%
+  summarize(Min = min(measured_value), Second_Lowest = nth(measured_value, 2, descending = FALSE), Third_Lowest = nth(measured_value, 3))%>%
+  print(n = 38)
+```
+
+For January, many genotypes have very small plants. Why were these not removed when we looked for outliers? Maybe our outlier threshold is too low?
+
+
+
+
+

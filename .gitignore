@@ -6,5 +6,6 @@
 *.RData
 *.accdb
 *.html
-
+*.csv
+Data/
 .Rproj.user

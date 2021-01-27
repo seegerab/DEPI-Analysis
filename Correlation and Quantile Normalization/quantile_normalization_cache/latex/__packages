@@ -1,0 +1,17 @@
+base
+knitr
+formatR
+dplyr
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+stringr
+forcats
+reshape2
+ggthemes
+extrafont
+sm
+preprocessCore

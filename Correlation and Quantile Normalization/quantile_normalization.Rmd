@@ -4,14 +4,14 @@ author: "Abigail Seeger"
 date: "August 6, 2020"
 output:
   pdf_document:
-    fig_height: 25
-    fig_width: 25
+    # fig_height: 25
+    # fig_width: 25
     toc: yes
     toc_depth: '4'
   fig_width: 20
   html_document:
-    fig_height: 25
-    fig_width: 25
+    # fig_height: 25
+    # fig_width: 25
     highlight: tango
     number_sections: yes
     theme: paper
@@ -113,11 +113,16 @@ add_day_col <- function(df){
 
 ```{r read_data}
 ###Read in the data
-depi_jan <-read.table("DEPI_Jan_Seeger_Final.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
-depi_dec_feb <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Correct_January_Created_Jan132021.csv", sep = ",", header = TRUE, stringsAsFactors = FALSE)
+depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_jan_growth <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Jan_Growth_Days_1_7.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
 ###Add column names
 names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
 names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+names(depi_jan_growth) <- c("individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number", "cell_number", "row_number", "column_number", "border", "treatment", "measurement_ID", "plant_ID","DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement")
+
+depi_jan <- rbind(depi_jan_growth, depi_jan)
+
 
 ```
 
@@ -126,7 +131,7 @@ names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subli
 I don't have the column that I need in the depi_dec_feb. But, I can add a column based on the information in the individual_plant_metadata file. 
 
 ```{r}
-indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+indiv_plant_metadata <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
 
 indiv_plant_metadata <- indiv_plant_metadata%>%
   select(V1,V5)%>%
@@ -137,8 +142,6 @@ indiv_plant_metadata <- indiv_plant_metadata%>%
 depi_dec_feb <- merge(depi_dec_feb, indiv_plant_metadata, by=c("plant_ID"))
 
 unique(filter(depi_dec_feb, genotype == "Col0")$full_subline_information)
-
-
 unique(filter(depi_jan, genotype == "Col0")$full_subline_information)
 
 ```
@@ -359,7 +362,7 @@ Now, I change approach after meeting with Shinhan and Melissa.
 
 
 
-![A schematic of how Shinhan proposed I tackle this.](/Users/Joan Seeger/Documents/Research/Shiu_Lab/Shiu_Lab_R/quantile_schematic.png)
+![A schematic of how Shinhan proposed I tackle this.](/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/DEPI_Figures_For_Rmd/quantile_schematic.png)
 
 
 General approach:
@@ -1095,7 +1098,7 @@ Make Powerpoint for next meeting with Shinhan.
 
 Another way to normalize the data is to create a linear model, using the experiment and flat number as factors in the model.
 
-```{r}
+```{r eval = FALSE}
 library(car)
 library(lme4)
 #contrasts must be set to contr.sum so that Type III Anova is calculated correctly

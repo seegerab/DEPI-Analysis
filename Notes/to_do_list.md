@@ -24,6 +24,30 @@
 
 ** One example of a mutant that has a strange behavior among the experiments is mpk 16 for phi2. 3 line plots - one for each experiment - comparing mpk 16 and Col0. 
 
+# January 27
+
+* Change file paths
+* Make sure code runs
+* Change file paths for schematics to include
+* Knit to PDF
+
+## Done:
+
+* quantile_normalization.Rmd
+* Create_Final_CSV_File.Rmd
+* DEPI_Day_3_Epistasis.Rmd
+* correlation_investigation.Rmd
+
+* Everything above the DEPI_R_Scripts folder
+
+## To Do:
+
+* HeatMapsAfterQuantileNormalization
+
+
+
+
+
 
 
 

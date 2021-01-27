@@ -6,8 +6,8 @@ output:
   pdf_document:
     toc: yes
     toc_depth: '4'
-    fig_height: 25
-    fig_width: 25
+    # fig_height: 25
+    # fig_width: 25
   html_document:
     fig_height: 25
     fig_width: 25
@@ -181,16 +181,20 @@ addToDF <- function(df, v){
 # Load Data
 
 ```{r}
-###Read in the January Data
-depi_jan <-read.table("JanCorrecTimePoints.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
-###Read in the December and February Data
-depi_dec_feb <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
-###Add column names to depi_jan
+###Read in the data
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Correct_January_Created_Jan132021.csv", sep = ",", header = TRUE, stringsAsFactors = FALSE)
+depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_jan_growth <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Jan_Growth_Days_1_7.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
+###Add column names
 names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
-###Add column names to depi_dec_feb
 names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
-###Read in the individual plant metadata, because we need the full subline information to select the correct sublines of Col0
-indiv_plant_metadata <-read.table("Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+names(depi_jan_growth) <- c("individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number", "cell_number", "row_number", "column_number", "border", "treatment", "measurement_ID", "plant_ID","DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement")
+
+depi_jan <- rbind(depi_jan_growth, depi_jan)
+
+indiv_plant_metadata <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+
+
 ###Rename columns 
 indiv_plant_metadata <- indiv_plant_metadata%>%
   select(V1,V5)%>%
@@ -394,7 +398,7 @@ for (i in c("Jan", "Feb", "Dec")){
   plot1 <- ggplot(data = plotData, aes(x = measured_value, color = flat_number))+
     geom_density()+
     stat_density(geom = "line", position = "identity")+
-    theme_minimal(base_size = 50,
+    theme_minimal( 
                   base_family = "Calibri")+
     labs(x = "Phi2",
          y = "Density",
@@ -405,7 +409,7 @@ for (i in c("Jan", "Feb", "Dec")){
   plot2 <- ggplot(data = plotData, aes(x = normalized_value, color = flat_number))+
     geom_density()+
     stat_density(geom = "line", position = "identity")+
-    theme_minimal(base_size = 50,
+    theme_minimal( 
                   base_family = "Calibri")+
     labs(x = "Phi2, Normalized by Flat",
          y = "Density",
@@ -726,8 +730,8 @@ ggplot(data = cell_371_jan, aes(x = time_point, y = genotype, fill = log2_fold))
   labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "January: Phi2 Normalized Log 2 Fold Change")+
   geom_tile(width = 10, height = 10)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
-  theme_tufte(base_family = "Calibri",
-              base_size = 50)+
+  theme_tufte(base_family = "Calibri"
+                 )+
   theme(strip.background.y = element_blank(),
         strip.text.y = element_blank(),
         axis.title.x=element_blank(),
@@ -749,8 +753,8 @@ ggplot(data = cell_371_feb, aes(x = time_point, y = genotype, fill = log2_fold))
   labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "February: Phi2 Normalized Log 2 Fold Change")+
   geom_tile(width = 10, height = 10)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
-  theme_tufte(base_family = "Calibri",
-              base_size = 50)+
+  theme_tufte(base_family = "Calibri"
+                 )+
   theme(strip.background.y = element_blank(),
         strip.text.y = element_blank(),
         axis.title.x=element_blank(),
@@ -773,8 +777,8 @@ ggplot(data = cell_371_dec, aes(x = time_point, y = genotype, fill = log2_fold))
   labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = "December: Phi2 Normalized Log 2 Fold Change")+
   geom_tile(width = 10, height = 10)+
   facet_grid(genotype ~ day, scales = "free", switch = "y")+
-  theme_tufte(base_family = "Calibri",
-              base_size = 50)+
+  theme_tufte(base_family = "Calibri"
+                 )+
   theme(strip.background.y = element_blank(),
         strip.text.y = element_blank(),
         axis.title.x=element_blank(),
@@ -809,8 +813,8 @@ for (element in genotype_combinations){
       labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = paste("January:", m, "Quantile Normalized Log 2 Fold Change"))+
       geom_tile(width = ifelse(m == "leafarea", 16, 10) , height = 30)+
       facet_grid(genotype ~ day, scales = "free", switch = "y")+
-      theme_tufte(base_family = "Calibri",
-                  base_size = 50)+
+      theme_tufte(base_family = "Calibri"
+                     )+
       theme(strip.background.y = element_blank(),
             strip.text.y = element_blank(),
             axis.title.x=element_blank(),
@@ -834,8 +838,8 @@ for (element in genotype_combinations){
       labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = paste("February:", m, "Quantile Normalized Log 2 Fold Change"))+
       geom_tile(width = ifelse(m == "leafarea", 16, 10) , height = 30)+
       facet_grid(genotype ~ day, scales = "free", switch = "y")+
-      theme_tufte(base_family = "Calibri",
-                  base_size = 50)+
+      theme_tufte(base_family = "Calibri"
+                     )+
       theme(strip.background.y = element_blank(),
             strip.text.y = element_blank(),
             axis.title.x=element_blank(),
@@ -858,8 +862,8 @@ for (element in genotype_combinations){
       labs(fill = "Log 2 Fold Change", x = "Hours", y = NULL, title = paste("December:", m, "Quantile Normalized Log 2 Fold Change"))+
       geom_tile(width = ifelse(m == "leafarea", 16, 10) , height = 30)+
       facet_grid(genotype ~ day, scales = "free", switch = "y")+
-      theme_tufte(base_family = "Calibri",
-                  base_size = 50)+
+      theme_tufte(base_family = "Calibri"
+                     )+
       theme(strip.background.y = element_blank(),
             strip.text.y = element_blank(),
             axis.title.x=element_blank(),

@@ -48,6 +48,8 @@ library(lemon)
 
 # Load in Cleaned Data
 
+Note: this is just for December and February. 
+
 ```{r}
 depi_data <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Clean_DEPI_Data_V2.csv", sep = ",", header = TRUE)
 ```

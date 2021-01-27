@@ -81,43 +81,59 @@ This is the general approach I will take:
 4. Finally, I will create a table that has the r-squared values for each day of the experiment, for each genotype, and for each measurement.
 
 
-![A schematic of how Shinhan proposed I tackle this.](/Users/Joan Seeger/Documents/Research/Shiu Lab/Shiu Lab - R/correlation_schematic.png)
+![A schematic of how Shinhan proposed I tackle this.](/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/DEPI_Figures_For_Rmd/correlation_schematic.png)
 
 
 # Create Data Frame
 
 ```{r read_data}
 ###Read in the data
-depi_jan <-read.table("DEPI_Jan_Seeger_Final.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
-depi_dec_feb <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+depi_jan <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Correct_January_Created_Jan132021.csv", sep = ",", header = TRUE, stringsAsFactors = FALSE)
+depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_jan_growth <- read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Jan_Growth_Days_1_7.txt", sep = ",", header = TRUE, stringsAsFactors = FALSE)
 ###Add column names
 names(depi_jan) <- c("measurement_ID", "plant_ID", "DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement", "individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number","cell_number", "row_number", "column_number", "border", "treatment")
 names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")
+names(depi_jan_growth) <- c("individual_plant_metadata", "genotype", "line", "subline", "full_subline_information", "experiment_number", "flat_number", "cell_number", "row_number", "column_number", "border", "treatment", "measurement_ID", "plant_ID","DEPI_ID", "time_point", "measured_value", "light_regimen", "measurement")
 
+depi_jan <- rbind(depi_jan_growth, depi_jan)
 ```
 
 Create subsets of the Feb and Dec data. Even though I will eventually re-combine these subsets to create on data frame, this will make it easier to shift the NPQ values so the minimum is 0, and address NA and negative phi2 values for each experiment. 
 
 Next, select only the individual plant metadata, genotype, flat number, measurement, time point, measured value, and border columns, amd add a column with the month of the experiment. 
 
+Filter to the correct sublines of Col0:
+
+```{r}
+indiv_plant_metadata <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/Individual_plant_metadata.txt", sep = ",", header = FALSE, stringsAsFactors = FALSE)
+
+indiv_plant_metadata <- indiv_plant_metadata%>%
+  select(V1,V5)%>%
+  rename(plant_ID = V1, full_subline_information = V5)
+
+depi_dec_feb <- merge(depi_dec_feb, indiv_plant_metadata, by=c("plant_ID"))
+```
+
+
 
 ```{r}
 ###Select only the columns that we need and add a column with the month
 dec_data <- depi_dec_feb%>%
-    filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+    filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))%>%
   filter(substr(plant_ID, 1,4) == "1217")%>%
   filter(border == FALSE)%>%
   select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
   mutate(month = "Dec")
 
 jan_data <- depi_jan%>%
-  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))%>%
   filter(border == FALSE)%>%
   select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%
   mutate(month = "Jan")
 
 feb_data <- depi_dec_feb%>%
-  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&subline == "1"))%>%
+  filter(!genotype %in% c("b1", "b3", "b1b3", "ftsz2-1", "ftsz2-2", "ftsz-dbl", "Col0")|(genotype == "Col0"&full_subline_information %in% c("Col1-1", "Col1-3", "Col1-4", "Col1-2")))%>%
   filter(border == FALSE)%>%
   filter(substr(plant_ID, 1,4) == "0218")%>%
   select(individual_plant_metadata, genotype, flat_number, measurement, time_point, measured_value, border, subline)%>%

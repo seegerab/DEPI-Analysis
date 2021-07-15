@@ -1,3 +1,6 @@
+### This code creates an excel file of the normalized values and 
+### doesn't remove the outliers
+
 ###Load Necessary Packages
 library(ggplot2)
 library(gridExtra)
@@ -23,16 +26,19 @@ data$Genotype <- as.factor(data$Genotype)
 data <- data%>%
   ###Group by experiment and genotype
   group_by(Experiment, Genotype)%>%
+  ###SKIP THE OUTLIER REMOVAL STEPS HERE:
   ###For each of the measurements, replace the measured value with NA if the measured value is classified as an outlier
-  mutate(SN = replace(SN, outliers_mad(SN, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
-  mutate(SPF = replace(SPF, outliers_mad(SPF, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
-  mutate(TSC = replace(TSC, outliers_mad(TSC, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
+  # mutate(SN = replace(SN, outliers_mad(SN, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
+  # mutate(SPF = replace(SPF, outliers_mad(SPF, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
+  # mutate(TSC = replace(TSC, outliers_mad(TSC, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
   ungroup()%>%
   ###Rearrange the data by experiment and genotype
   arrange(Experiment, Genotype)
 
 ###Here, summarize the proportion of measured values that are classified as outliers for each measurement:
 ###TSC
+
+###THIS CODE IS UNNECESSARY; WE DIDN'T REMOVE OUTLIERS HERE
 data%>%
   group_by(Experiment)%>%
   summarize(PropOutlier = sum(is.na(TSC)) / length(TSC))
@@ -130,6 +136,9 @@ order1 <- test%>%
   arrange(SN)
 order2 <- test%>%
   arrange(NormalizedSN)
+
+order1 == order2 
+
 
 ###Plan:
 ###Divide the data by Flat and Experiment
@@ -230,6 +239,11 @@ NormalizedData <- rbind(DEPI1_SN,
                         DEPI3_TSC
                         )
 
+### SAVE THESE NORMALIZED VALUES FOR MELISSA
+### REMEMBER, THIS IS WITHOUT REMOVING ANY OUTLIERS
+
+write.csv(NormalizedData, file = "Fitness_NormalizedValues_IncludingOutliers.csv")
+
 ###Visualize the normalizations to make sure the quantile normalized
 ###flats each have the same distribution for all experiments
 
@@ -259,10 +273,6 @@ for (i in c("DEPI1", "DEPI2", "DEPI3")){
   # ggsave(file=QuantFileName, arrangeGrob(plot1, plot2), width = 7, height = 7)
   } 
 }
-
-###Something is wrong with SN! Talk to Melissa about this...
-
-###Investigate why SN quantile normalization isn't correct
 
 ###Epistasis Calculations:
 ###Initialize an empty data frame to populate with information:
@@ -505,20 +515,52 @@ selectionCoef <- selectionCoef[, -c(5:6)]
 write.csv(geneticInteractions, file = "epistasis.csv", row.names = FALSE)
 write.csv(selectionCoef, file = "selectionCoefficients.csv", row.names = FALSE)
 
-###Notes from 11/23 Meeting with Melissa
+### Calculate p-values comparing each measurement to wild type
 
-###Direction of the effect is different 
-###In some cases, effect is just less strong
-###In others, there is an opposite effect
-###Third experiment = less stress = smaller interaction?
+### Start with TSC
 
-###To Do
-###Meet with Melissa once these heatmaps are done [triplet and all] [pdf is okay]
+p_value <- function (data_frame){
+  ###Initialize an empty data frame
+  out = data.frame()
+  ###For each genotype:
+  for (i in unique(filter(data_frame, (Genotype != "Col" & Genotype != "mpk5_17"))$Genotype)){
+    ###We don't want to make comparisons of WT to itself - this could impact FDR correction
+    indiv_data <- data_frame%>% 
+      group_by(Measurement, Experiment)%>%
+      mutate(p = (wilcox.test(NormalizedMeasuredValue[Genotype == i], NormalizedMeasuredValue[Genotype == "Col"], correct = FALSE, paired = FALSE))$p.value)%>%
+      
+      ###Add a column with each genotype
+      mutate(Genotype = i)%>%
+      
+      select(Experiment, Genotype, Measurement, p)
+      ###Add individual information to the main data frame
+      out <- rbind(as.data.frame(indiv_data), out)%>%distinct()
+    }
 
-###Create a similar set of plots for phi2 for a couple of time points
-###Based on the heat maps if there's a time point that looks interesting
+    
+  return(out)}
+
+###Convert the normalized data from a tibble to a data frame
+NormalizedData <- as.data.frame(NormalizedData)
+### Apply the p_values function to the NormalizedData
+p_values <- p_value(NormalizedData)  
+
+### Adjust the p-values using an FDR correction
+adjusted_p_values <- p_values%>%
+  group_by(Measurement, Experiment)%>%
+  mutate(p_adj = p.adjust(p, method = 'fdr'))
+
+### Add a column with a boolean indicating if the adjusted p-value is significant or not
+adjusted_p_values$significant <- adjusted_p_values$p_adj < 0.05
+
+### Convert this to a .csv file to share with Melissa:
+write.csv(adjusted_p_values, file = "Fitness_PValues_IncludingOutliers.csv")
 
 
 
 
-
+###Confirm that this p-value correction is actually doing what I think it is:
+test <- filter(p_values, Experiment == "DEPI1",  Measurement == "SN")%>%
+  select(p, Genotype)
+test$adjusted <- p.adjust(test$p, method = "fdr")
+filter(adjusted_p_values, Experiment == "DEPI1", Measurement == "SN")

@@ -1,3 +1,6 @@
+### This code creates an excel file of the normalized values and 
+### doesn't remove the outliers
+
 ###Load Necessary Packages
 library(ggplot2)
 library(gridExtra)
@@ -10,7 +13,7 @@ library(ggthemes)
 library(extrafont)
 
 data <- read.csv("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/MAPK_DEPI_fitness_data_110920.csv", header = TRUE)
-###The "Experiment" column name reads in strange, with weird characters at the begining
+###The "Experiment" column name reads in strange, with weird characters at the beginning
 ###Rename this column:
 colnames(data)[1] <- "Experiment"
 #Make sure flat, row, column, and genotype are coded as categorical variables
@@ -23,6 +26,7 @@ data$Genotype <- as.factor(data$Genotype)
 data <- data%>%
   ###Group by experiment and genotype
   group_by(Experiment, Genotype)%>%
+  ###INCLUDE THE OUTLIER REMOVAL STEPS HERE:
   ###For each of the measurements, replace the measured value with NA if the measured value is classified as an outlier
   mutate(SN = replace(SN, outliers_mad(SN, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
   mutate(SPF = replace(SPF, outliers_mad(SPF, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
@@ -31,8 +35,12 @@ data <- data%>%
   ###Rearrange the data by experiment and genotype
   arrange(Experiment, Genotype)
 
+
+
 ###Here, summarize the proportion of measured values that are classified as outliers for each measurement:
 ###TSC
+
+###THIS CODE IS UNNECESSARY; WE DIDN'T REMOVE OUTLIERS HERE
 data%>%
   group_by(Experiment)%>%
   summarize(PropOutlier = sum(is.na(TSC)) / length(TSC))
@@ -130,6 +138,9 @@ order1 <- test%>%
   arrange(SN)
 order2 <- test%>%
   arrange(NormalizedSN)
+
+order1 == order2 
+
 
 ###Plan:
 ###Divide the data by Flat and Experiment
@@ -230,11 +241,184 @@ NormalizedData <- rbind(DEPI1_SN,
                         DEPI3_TSC
                         )
 
+########################3
+
+### SAVE THESE NORMALIZED VALUES FOR MELISSA
+### REMEMBER, THIS IS WITH REMOVING THE OUTLIERS
+
+#write.csv(NormalizedData, file = "Fitness_NormalizedValues_OutliersRemoved.csv")
+
+####################################################################################
+####################################################################################
+### Bootstrapping - Col0
+####################################################################################
+####################################################################################
+
+### Before creating a loop for each experiment and measurement, make sure this works for DEPI3 and TSC
+
+# test_bootstrapping_data <- filter(NormalizedData, Experiment == "DEPI3", Measurement == "TSC", Genotype == "Col")$NormalizedMeasuredValue
+# mean_deviation_vector <- rep(NA, 1000)
+
+par(mfrow = c(3, 3))
+### Initialize a matrix to populate with the 2.5% quantile and 97.5% quantile for each experiment and measurement
+quantile_matrix <- data.frame(nrow = 9,
+                          ncol = 4,
+                          dimnames = list(NULL,
+                                          c("Experiment", "Measurement", "Quantile_0.025", "Quantile_0.975")))
+row_count <- 1
+for (j in unique(NormalizedData$Experiment)){
+  for (k in unique(NormalizedData$Measurement)){
+    temp_bootstrapping_data <- filter(NormalizedData, Experiment == j, Measurement == k, Genotype == "Col")$NormalizedMeasuredValue
+    temp_mean_deviation_vector <- rep(NA, 10000)
+    for (i in 1:10000){
+      ### replace the ith element in the mean_deviation vector with the mean of the deviation from the sample to the mean of all Col0
+      temp_mean_deviation_vector[i] <-mean(
+        ### Sample from the measured values associated with Col0 for the jth experiment and the kth measurement
+        sample(temp_bootstrapping_data, 
+             size = floor(length(temp_bootstrapping_data) / 2),
+             ### Sample with replacement 
+             replace = TRUE) 
+        ### Take the difference between the sample means and the mean of all Col0 plants for the jth experiment and kth measurement
+        - mean(temp_bootstrapping_data))
+    }
+    ### Create a histogram of these 1,000 deviations from the mean
+    hist(temp_mean_deviation_vector, 
+         xlab = " ",
+         main = paste(j, k, sep = " "))
+    ### Add a row with the experiment, measurement, 2.5% quantile, and 97.5% quantile
+    quantile_matrix[row_count, 1] <- j
+    quantile_matrix[row_count, 2] <- k
+    quantile_matrix[row_count, 3] <- quantile(temp_mean_deviation_vector, probs = c(0.025))
+    quantile_matrix[row_count, 4] <- quantile(temp_mean_deviation_vector, probs = c(0.975))
+    
+    row_count <- row_count + 1
+  }
+}
+quantile_df <- as.data.frame(quantile_matrix)
+
+
+
+####################################################################################
+####################################################################################
+### Similar approach - each genotype
+####################################################################################
+####################################################################################
+genotype_list <- unique(NormalizedData$Genotype)[unique(NormalizedData$Genotype) != "mpk5_17"]
+colname_vector <- append(as.vector(genotype_list), c("Measurement", "Experiment"))
+
+#test_data <- filter(NormalizedData, Experiment == "DEPI3", Measurement == "TSC")
+temp_matrix <- matrix(data = NA, 
+                      nrow = 9,
+                      ncol = 39,
+                      dimnames = list(NULL,
+                                      append(as.vector(genotype_list), c("Experiment", "Measurement"))))
+                      
+
+
+matrix_count <- 1
+
+
+for (j in unique(NormalizedData$Experiment)){
+  for (k in unique(NormalizedData$Measurement)){
+    
+    temp_data <- filter(NormalizedData, Experiment == j, Measurement == k)
+    
+    temp_vector <- rep(NA, length(unique(temp_data$Genotype)))
+    
+    for (i in 1:length(genotype_list)){
+      temp_vector[i] <- round(
+        mean(
+          
+        filter(temp_data, Genotype == genotype_list[i])$NormalizedMeasuredValue
+        - 
+          mean(filter(temp_data, Genotype == "Col")$NormalizedMeasuredValue)), 6)
+    }
+    temp_vector[i + 1] <- j
+    temp_vector[i + 2] <- k
+    temp_matrix[matrix_count, ] <- temp_vector
+    
+    matrix_count <- matrix_count + 1
+      
+  }
+}
+
+exceeds_quantile_df <- as.matrix(cbind(as.data.frame(temp_matrix), as.data.frame(quantile_df)))
+
+for (i in 1:nrow(exceeds_quantile_df)){
+  for (j in 1:(ncol(exceeds_quantile_df) - 7)){
+    
+    if (as.numeric(exceeds_quantile_df[i,j]) < as.numeric(exceeds_quantile_df[i,42])){
+      exceeds_quantile_df[i,j] <- "Lower than 0.025 quantile"
+    } 
+    else if (as.numeric(exceeds_quantile_df[i,j]) > as.numeric(exceeds_quantile_df[i,43])){
+      exceeds_quantile_df[i,j] <- "Greater than 0.975 quantile"
+    }
+  }
+}
+
+plot_data_TSC <- as.matrix(as_tibble(temp_matrix)%>%
+  filter(Measurement == "TSC")%>%
+  select(-c("Measurement", "Experiment")))
+
+plot_data_TSC <- matrix(as.numeric(plot_data_TSC),    
+                        ncol = ncol(plot_data_TSC),
+                        dimnames = list(c("DEPI1", "DEPI2", "DEPI3"),
+                                        as.vector(genotype_list)))
+                        
+plot_data_SN <- as.matrix(as_tibble(temp_matrix)%>%
+                             filter(Measurement == "SN")%>%
+                             select(-c("Measurement", "Experiment")))
+
+plot_data_SN <- matrix(as.numeric(plot_data_SN),    
+                        ncol = ncol(plot_data_SN),
+                        dimnames = list(c("DEPI1", "DEPI2", "DEPI3"),
+                                        as.vector(genotype_list)))
+
+plot_data_SPF<- as.matrix(as_tibble(temp_matrix)%>%
+                            filter(Measurement == "SPF")%>%
+                            select(-c("Measurement", "Experiment")))
+
+plot_data_SPF <- matrix(as.numeric(plot_data_SPF),    
+                       ncol = ncol(plot_data_SPF),
+                       dimnames = list(c("DEPI1", "DEPI2", "DEPI3"),
+                                       as.vector(genotype_list)))
+
+par(mfrow = c(3,1))
+heatmap(plot_data_SPF, 
+        Rowv = NA, 
+        Colv = NA, 
+        main = "SPF")
+heatmap(plot_data_TSC, 
+        Rowv = NA, 
+        Colv = NA,
+        main = "TSC")
+heatmap(plot_data_SN, 
+        Rowv = NA, 
+        Colv = NA,
+        main = "SN")
+
+
+
+# plot_data <- final_data
+# for (i in 1:nrow(plot_data)){
+#   for (j in 1:ncol(plot_data[,1:37])){
+#     if (plot_data[i,j] == "Greater than 0.975 quantile"){
+#       plot_data[i,j] <- "Red"
+#     }
+#     else if (plot_data[i,j] == "Lower than 0.025 quantile"){
+#       plot_data[i,j] <- "Blue"
+#     }
+#     else{
+#       plot_data[i,j] <- "White"
+#     }
+#   }
+# }
+
+library(ggplot2)
+ggplot(data = plot_data, aes(x = ))
+
 ###Visualize the normalizations to make sure the quantile normalized
 ###flats each have the same distribution for all experiments
-
-
-
 for (i in c("DEPI1", "DEPI2", "DEPI3")){
   for (m in c("TSC", "SN", "SPF")){
   plotData <- NormalizedData%>%
@@ -259,10 +443,6 @@ for (i in c("DEPI1", "DEPI2", "DEPI3")){
   # ggsave(file=QuantFileName, arrangeGrob(plot1, plot2), width = 7, height = 7)
   } 
 }
-
-###Something is wrong with SN! Talk to Melissa about this...
-
-###Investigate why SN quantile normalization isn't correct
 
 ###Epistasis Calculations:
 ###Initialize an empty data frame to populate with information:
@@ -505,20 +685,76 @@ selectionCoef <- selectionCoef[, -c(5:6)]
 write.csv(geneticInteractions, file = "epistasis.csv", row.names = FALSE)
 write.csv(selectionCoef, file = "selectionCoefficients.csv", row.names = FALSE)
 
-###Notes from 11/23 Meeting with Melissa
+### Calculate p-values comparing each measurement to wild type
 
-###Direction of the effect is different 
-###In some cases, effect is just less strong
-###In others, there is an opposite effect
-###Third experiment = less stress = smaller interaction?
+p_value <- function (data_frame){
+  ###Initialize an empty data frame
+  out = data.frame()
+  ###For each genotype:
+  for (i in unique(filter(data_frame, (Genotype != "Col" & Genotype != "mpk5_17"))$Genotype)){
+    ###We don't want to make comparisons of WT to itself - this could impact FDR correction
+    indiv_data <- data_frame%>% 
+      group_by(Measurement, Experiment)%>%
+      mutate(p = (wilcox.test(NormalizedMeasuredValue[Genotype == i], NormalizedMeasuredValue[Genotype == "Col"], correct = FALSE, paired = FALSE))$p.value)%>%
+      
+      ###Add a column with each genotype
+      mutate(Genotype = i)%>%
+      
+      select(Experiment, Genotype, Measurement, p)
+      ###Add individual information to the main data frame
+      out <- rbind(as.data.frame(indiv_data), out)%>%distinct()
+    }
 
-###To Do
-###Meet with Melissa once these heatmaps are done [triplet and all] [pdf is okay]
+    
+  return(out)}
 
-###Create a similar set of plots for phi2 for a couple of time points
-###Based on the heat maps if there's a time point that looks interesting
+corrected_p_value <- function(data_frame){
+  out <- data_frame%>%
+    ###Group by experiment and measurement - we are correcting by the number of genotypes 
+    group_by(Experiment, Measurement)%>%
+    mutate(p_adj = p.adjust(p, method = "fdr"))
+  
+    return(out) 
+}
+
+###Convert the normalized data from a tibble to a data frame
+NormalizedData <- as.data.frame(NormalizedData)
+### Apply the p_values function to the NormalizedData
+p_values <- p_value(NormalizedData)  
+### Adjust the p-values using an FDR correction
+adjusted_p_values <- p_values%>%
+  group_by(Measurement, Experiment)%>%
+  mutate(p_adj = round(p.adjust(p, method = 'fdr'), 7))
+
+### Add a column with a boolean indicating if the adjusted p-value is significant or not
+adjusted_p_values$significant <- adjusted_p_values$p_adj < 0.05
+
+### Convert this to a .csv file to share with Melissa:
+write.csv(adjusted_p_values, file = "Fitness_PValues_OutliersRemoved.csv")
 
 
 
+
+###Confirm that this p-value correction is actually doing what I think it is:
+test <- filter(p_values, Experiment == "DEPI1",  Measurement == "TSC")%>%
+  select(p, Genotype)
+test$adjusted <- p.adjust(test$p, method = "fdr")
+filter(adjusted_p_values, Experiment == "DEPI1", Measurement == "TSC")$p_adj
+
+
+
+library(stats)
+P_value <- c(0.0001, 0.001, 0.006, 0.03, 0.095, 0.117, 0.234, 0.552, 0.751, 0.985)
+
+p.adjust(P_value, method="bonferroni") ## [1] 0.001 0.010 0.060 0.300 0.950 1.000 1.000 1.000 1.000 1.000
+
+P_value <- test$p
+
+p.adjust(P_value, method="fdr")
+
+
+adjusted_p_values%>%
+  group_by(Experiment, Measurement)%>%
+  summarize(length(unique(p_adj)))
 
 

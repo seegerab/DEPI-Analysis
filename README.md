@@ -1,5 +1,7 @@
 # DEPI
 
+This repository stores the analysis for Arabadopsis plants in a range of map kinase mutants grown in the Dynamic Environmental Photosynthetic Imager (DEPI) chambers. A range of measurements - phi2, npq, and plant growth - are recorded. The overall goal of this project is to investigate the phenotypes of single mutants compared to double mutants to determine the extent of genetic interaction taking place. 
+
 # Visualizations 
 
 This folder contains the figures generated through the December and February analysis contained in the DEPI_Analysis_Dec and DEPI_Analysis_Feb files. These figures are:

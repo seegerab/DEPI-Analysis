@@ -1,6 +1,3 @@
-### This code creates an excel file of the normalized values and 
-### doesn't remove the outliers
-
 ###Load Necessary Packages
 library(ggplot2)
 library(gridExtra)
@@ -12,25 +9,25 @@ library(tidyr)
 library(ggthemes)
 library(extrafont)
 library(stringi)
-
-
-data <- read.csv("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/MAPK_DEPI_fitness_data_110920.csv", header = TRUE)
-###The "Experiment" column name reads in strange, with weird characters at the beginning
-###Rename this column:
-colnames(data)[1] <- "Experiment"
-#Make sure flat, row, column, and genotype are coded as categorical variables
+### Read in the data
+### Note: this is using the data updated July 1, 2021
+data <- read.delim("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/MAPK_DEPI_data_070121.txt", header = TRUE)
+#Make sure flat, row, column, and genotype are coded as factors
 data$Flat<-as.factor(data$Flat)
 data$Row<-as.factor(data$Row)
 data$Column<-as.factor(data$Column)
 data$Genotype <- as.factor(data$Genotype)
 
+####################################################################################
+# Outlier removal and summary
+####################################################################################
+
 ### Create a unique identifier for each plant:
 data$ID <- paste(data$Experiment, "_", data$Flat, "_", data$Number, sep = "")
-
-data <- data%>%
+### Create a data frame with the outliers removed
+data_outliers_removed <- data%>%
   ###Group by experiment and genotype
   group_by(Experiment, Genotype)%>%
-  ###INCLUDE THE OUTLIER REMOVAL STEPS HERE:
   ###For each of the measurements, replace the measured value with NA if the measured value is classified as an outlier
   mutate(SN = replace(SN, outliers_mad(SN, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
   mutate(SPF = replace(SPF, outliers_mad(SPF, b=1.4826, threshold=3.5, na.rm=TRUE)$outliers_pos, NA))%>%
@@ -38,32 +35,26 @@ data <- data%>%
   ungroup()%>%
   ###Rearrange the data by experiment and genotype
   arrange(Experiment, Genotype)
-
-### Get a list of the plants that are outliers for Melissa:
-SN_outliers <- filter(data, is.na(data$SN))$ID
-TSC_outliers <- filter(data, is.na(data$TSC))$ID
-SPF_outliers <- filter(data, is.na(data$SPF))$ID
-
-
-###Here, summarize the proportion of measured values that are classified as outliers for each measurement:
-###TSC
-
-data%>%
+### Here are the unique plants that are classified as outliers
+SN_outliers <- filter(data_outliers_removed, is.na(data_outliers_removed$SN))$ID
+TSC_outliers <- filter(data_outliers_removed, is.na(data_outliers_removed$TSC))$ID
+SPF_outliers <- filter(data_outliers_removed, is.na(data_outliers_removed$SPF))$ID
+###Summarize the proportion of measured values that are classified as outliers for TSC
+data_outliers_removed%>%
   group_by(Experiment)%>%
   summarize(PropOutlier = sum(is.na(TSC)) / length(TSC))
-###SPF
-data%>%
+###Summarize the proportion of measured values that are classified as outliers for SPF
+data_outliers_removed%>%
   group_by(Experiment)%>%
   summarize(PropOutlier = sum(is.na(SPF)) / length(SPF))
-###SN
-data%>%
+###Summarize the proportion of measured values that are classified as outliers for SN
+data_outliers_removed%>%
   group_by(Experiment)%>%
   summarize(PropOutlier = sum(is.na(SN)) / length(SN))
 
-###Generally, DEPI2 has more outliers than the other two experiments
-###Leaning towards not showing SPF - focus on SN and TSC
-###See which ones are thrown out
-
+####################################################################################
+# Quantile normalization - flat level
+####################################################################################
 #Get a list of the double mutants in this data frame:
 all_double_mutants = list()
 for (gen in levels(data$Genotype)) {
@@ -71,10 +62,8 @@ for (gen in levels(data$Genotype)) {
     all_double_mutants = c(all_double_mutants, gen)
   }
 }
-
-###This function allows us to create a data frame where the columns are different lengths
-###This is needed, because there are a different number of plants per flat
-###To achieve this, add NA to the end of each column until each column is the same length
+###This function allows us to create a data frame where the columns are different lengths because there are a different number of plants per flat
+###Add NA to the end of each column until each column is the same length
 addToDF <- function(df, v){
   nRow <- nrow(df)
   lngth <- length(v)
@@ -85,32 +74,35 @@ addToDF <- function(df, v){
   }
   cbind(df,v)
 }
-
 ###Create a loop for each measurement and experiment
-for (i in 8:10){
-  ###Set the name to be either SN, SPF, or TSC, depending on the column
-  tmp.name <- colnames(data)[i]
+for (i in c("SN", "TSC", "SPF")){
+  ###Set tmp.name to be the measurement
+  tmp.name <- i
   ###For each of the experiments:
   for (j in c("DEPI1", "DEPI2", "DEPI3")){
-    ###Filter to select each specific month
-    temp_vector <- filter(data, Experiment == j)
+    ###Filter to the data for the experiment
+    experiment.data <- filter(data_outliers_removed, Experiment == j)
     ###Initialize an empty data frame
-    temp_df <- data.frame()
+    temp.df <- data.frame()
     ###Loop through each flat 
-    for (k in 1:length(unique(temp_vector$Flat))){
-      ###Create a temporary data frame - each column is the measured values for each flat
-      temp <- filter(temp_vector, Flat == k)[,i]
-      temp <- as.data.frame(temp)[,1]
-      temp_df <- addToDF(temp_df, temp)}
-    
-    ###Normalize across the flats
-    temp_normalize <- as.data.frame(normalize.quantiles(as.matrix(temp_df)))%>%
-      ###Add columns with the measurement and experiment to be certain there hasn't been any mix-ups
-      mutate(col.number = i, experiment= j)
+    for (k in 1:length(unique(experiment.data$Flat))){
+      ### Create a temporary vector of the measured values for each flat
+      flat.measurements <- experiment.data%>%
+        ### Filter to flat k
+        filter(Flat == k)%>%
+        ### Select the column with measurement i
+        select(i)
+      ### Add the flat.measurements to temp.df
+      ### Note as.data.frame is needed because temp.vector is technically a tibble
+      temp.df <- addToDF(temp.df, as.data.frame(flat.measurements)[,1])
+      }
+    ###Normalize across the flat (temp_normalize is a data frame, but temp.df needs to be converted to a matrix to use the normalize.quantiles function)
+    temp_normalize <- as.data.frame(normalize.quantiles(as.matrix(temp.df)))%>%
+      ###Add columns with the measurement and experiment to verify flat and experiment information
+      mutate(measurement = i, experiment= j)
     ###Create a name to give the normalized data based on the measurement and experiment
     temp_name <- paste(tolower(j), "_", tmp.name , "_normalize", sep = "")
-    ###Rename the columns
-    
+    ###Rename the columns, depending on the number of flats per experiment
     ###3 flats
     if(ncol(temp_normalize) == 5){
       temp_normalize <- temp_normalize%>%
@@ -127,51 +119,49 @@ for (i in 8:10){
     assign(temp_name, temp_normalize)}
 }
 
-###Replace the measured values with the quantile normalized measured values:
-###First, start with a test so I know this is the correct method
+####################################################################################
+# Verify Quantile Normalization is Correct!
+####################################################################################
 
-###Filter to only include Flat 2 and DEPI1
-test <- subset(data, Flat == 2 & Experiment == "DEPI1")
-###Add a column with the normalized value
-###These normalized values are the second column, with the string of NA
-###values removed from the column
+### The ultimate goal is to replace the measured values with the quantile normalized measured values.
+### First, start with a test so I know this is the correct method to use. 
+
+###Filter to only include Flat 2 and DEPI1 from the data frame with the outliers removed 
+test <- subset(data_outliers_removed, Flat == 2 & Experiment == "DEPI1")
+###Add a column with the normalized value. These normalized values are the second column, with the string of NA values removed from the column
 test$NormalizedSN <- depi1_SN_normalize[,2][1:132]
-###Add a column with the count
+###Add a column with the count to the data frame
 test$Count <- 1:nrow(test)
-###Sort first by quantile normalized value, and then by the un-normalized value
-###Because the order is maintained when we quantile normalized, this should be the same data frame!
-
+###Sort first by quantile normalized value, and then by the un-normalized value. Because the order is maintained when we quantile normalized, this should be the same data frame!
 order1 <- test%>%
   arrange(SN)
 order2 <- test%>%
   arrange(NormalizedSN)
+### order1 == order2 is a dataframe of boolean values. If the data frames match, all values will be TRUE, so the sum of each column will be the same - the number of rows in the data frame. 
+apply(order1 == order2, 2, sum)
+### This looks good! Apply the same approach to the entire data frame. First, divide the data by flat and experiment, do the above approach, and re-combine the data.
 
-order1 == order2 
-
-
-###Plan:
-###Divide the data by Flat and Experiment
-###Do the above approach
-###Re-combine the data
-
-###Reshape the data, so instead of having a column for each measurement, we
-###have a column with the measurement type - either SN, TSC, or SPF
-data <- data%>%
-  gather(Measurement, Measured_Value, 8:10)
-
-###For each experiment and flat:
-
-###Remove NA values from the data, and add a column with the normalized
-###values to the data
-
+####################################################################################
+# Create final data frame with quantile normalized values
+####################################################################################
+###Reshape the data, so instead of having a column for each measurement, we have a column with the measurement type - either SN, TSC, or SPF
+data_outliers_removed <- data_outliers_removed%>%
+  gather(Measurement, Measured_Value, c("SN", "TSC", "SPF"))
+###For each experiment and flat, remove NA values from the data and add a column with the normalized values to the data
+### Initialize an empty data frame for the DEPI1 experiment for the SN measurement
 DEPI1_SN <- data.frame()
-for (i in 1:4){
-  tempFlat <- data%>%
+### For each flat in DEPI1
+for (i in c(1:4)){
+  ### Filter to the ith flat and the DEPI1 experiment
+  ###Remove rows that have NA (remember, these are the NA values appended to the end of the rows in order to combine flats that have a different number of plants)
+  tempFlat <- data_outliers_removed%>%
     filter(Flat == i, Experiment == "DEPI1", Measurement == "SN")
   tempFlat <- na.omit(tempFlat)
+  ### Add a column with the normalized value from the data frame that we created in the loop above
   tempFlat$NormalizedMeasuredValue <- na.omit(depi1_SN_normalize[,i])
   DEPI1_SN <- rbind(DEPI1_SN, tempFlat)
 }
+
 DEPI1_TSC <- data.frame()
 for (i in 1:4){
   tempFlat <- data%>%
@@ -247,13 +237,9 @@ NormalizedData <- rbind(DEPI1_SN,
                         DEPI3_SPF,
                         DEPI3_TSC
                         )
-
-########################3
-
-### SAVE THESE NORMALIZED VALUES FOR MELISSA
-### REMEMBER, THIS IS WITH REMOVING THE OUTLIERS
-
+### SAVE THESE NORMALIZED VALUES TO USE IN LATER SCRIPTS. REMEMBER, THIS IS WITH REMOVING THE OUTLIERS
 #write.csv(NormalizedData, file = "Fitness_NormalizedValues_OutliersRemoved.csv")
+
 
 ####################################################################################
 ####################################################################################

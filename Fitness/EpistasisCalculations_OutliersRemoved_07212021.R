@@ -117,6 +117,16 @@ for (i in c("DEPI1", "DEPI2", "DEPI3")){
 ### Epistasis Calculations
 ####################################################################################
 
+### Here are the double mutants:
+
+### Here are all the double mutants:
+all_double_mutants = list()
+for (gen in levels(as.factor(data$Genotype))) {
+  if (str_detect(gen, "_") == T) {
+    all_double_mutants = c(all_double_mutants, gen)
+  }
+}
+
 ###Initialize an empty data frame to populate with information:
 geneticInteractions <- data.frame(DoubleMutant = rep(NA, 0), 
                                   MutantA = rep(NA, 0),
@@ -344,13 +354,16 @@ for (i in 1:3) {
 
 ###Remove the number and number2 columns (these were used to sort the plots correctly)
 geneticInteractions <- geneticInteractions%>%
-  select(-c("number", "number_2"))
+  select(-c("number", "number_2"))%>%
+  rename(AdditiveEp_OutliersRemoved = AdditiveEpistasis,
+         PropEp_OutliersRemoved = ProportionalEpistatis)
 selectionCoef <- selectionCoef%>%
-  select(-c("number", "number_2"))
+  select(-c("number", "number_2"))%>%
+  rename(SC_OutliersRemoved = SelectionCoefficient)
 
 ###Write to .csv files:
-write.csv(geneticInteractions, file = "epistasis_07212021.csv", row.names = FALSE)
-write.csv(selectionCoef, file = "selectionCoefficients_07212021.csv", row.names = FALSE)
+write.csv(geneticInteractions, file = "epistasis_07222021_OutliersRemoved.csv", row.names = FALSE)
+write.csv(selectionCoef, file = "selectionCoefficients_07222021_OutliersRemoved.csv", row.names = FALSE)
 
 ####################################################################################
 ### Calculate p-values for fitness measurements (SN, TSC, SPF)
@@ -390,11 +403,13 @@ p_values <- p_value(data)
 ### Adjust the p-values using an FDR correction
 adjusted_p_values <- p_values%>%
   group_by(Measurement, Experiment)%>%
-  mutate(p_adj = round(p.adjust(p, method = 'fdr'), 7))
+  mutate(p_adj = round(p.adjust(p, method = 'fdr'), 7))%>%
+  rename(p_OutliersRemoved = p,
+         p_adj_OutliersRemoved = p_adj)
 ### Add a column with a boolean indicating if the adjusted p-value is significant or not
-adjusted_p_values$significant <- adjusted_p_values$p_adj < 0.05
+adjusted_p_values$significant_OutliersRemoved <- adjusted_p_values$p_adj_OutliersRemoved < 0.05
 ### Convert this to a .csv file to share with Melissa:
-write.csv(adjusted_p_values, file = "Fitness_PValues_OutliersRemoved_07212021.csv")
+write.csv(adjusted_p_values, file = "FitnessPValues_07222021_OutliersRemoved.csv")
 
 
 

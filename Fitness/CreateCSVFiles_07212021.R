@@ -35,6 +35,22 @@ data$Genotype <- as.factor(data$Genotype)
 
 ### Create a unique identifier for each plant:
 data$ID <- paste(data$Experiment, "_", data$Flat, "_", data$Number, sep = "")
+### Find the ID's for the measured values that are already encoded as NA
+MeasuredValue_NA_ID <- c(filter(data, is.na(data$SN))$ID,
+filter(data, is.na(data$TSC))$ID,
+filter(data, is.na(data$SPF))$ID)
+### Melissa asked me to replace the NA values for DEPI1_2_92 with 0
+MeasuredValue_NA_ID <- MeasuredValue_NA_ID[MeasuredValue_NA_ID != "DEPI1_2_92"]
+### Remove this ID's from the data frame:
+data <- data%>%
+  filter(!(ID %in% MeasuredValue_NA_ID))
+### Now, the only remained NA values should be DEPI1_2_92 for SPF and TSC
+### Verify this:
+sum(is.na(data$SPF))
+sum(is.na(data$TSC))
+### Replace these remaining NA values with 0 
+data$SPF[is.na(data$SPF)] <- 0  
+data$TSC[is.na(data$TSC)] <- 0  
 ### Create a data frame with the outliers removed
 data_outliers_removed <- data%>%
   ###Group by experiment and genotype
@@ -50,6 +66,14 @@ data_outliers_removed <- data%>%
 SN_outliers <- filter(data_outliers_removed, is.na(data_outliers_removed$SN))$ID
 TSC_outliers <- filter(data_outliers_removed, is.na(data_outliers_removed$TSC))$ID
 SPF_outliers <- filter(data_outliers_removed, is.na(data_outliers_removed$SPF))$ID
+### Create a text file for this output:
+n <- max(length(SN_outliers), length(TSC_outliers), length(SPF_outliers))
+length(SN_outliers) <- n
+length(TSC_outliers) <- n
+length(SPF_outliers) <- n
+cbind(SPF_outliers, SN_outliers, TSC_outliers)
+write.csv(cbind(SPF_outliers, SN_outliers, TSC_outliers), 
+            file = "Outliers_Per_Measurement.csv")
 ###Summarize the proportion of measured values that are classified as outliers for TSC
 data_outliers_removed%>%
   group_by(Experiment)%>%

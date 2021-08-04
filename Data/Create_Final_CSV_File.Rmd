@@ -141,7 +141,7 @@ names(depi_jan_growth) <- c("individual_plant_metadata", "genotype", "line", "su
 depi_jan <- rbind(depi_jan_growth, depi_jan)
 
 ###Read in the December and February Data
-depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_dec_feb <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_Dec_Feb.txt", sep = ",", header = FALSE)
 
 ###Add column names to depi_dec_feb
 names(depi_dec_feb) <- c("individual_plant_metadata", "genotype", "line", "subline", "border", "flat_number", "measurement_ID", "plant_ID", "measurement", "time_point", "measured_value")

@@ -58,7 +58,7 @@ library(viridis)
 Next, load in the data.
 
 ```{r load_depi_data}
-depi_data <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_data <-read.table("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/DEPI_Dec_Feb.txt", sep = ",", header = FALSE)
 head(depi_data)
 ```
 

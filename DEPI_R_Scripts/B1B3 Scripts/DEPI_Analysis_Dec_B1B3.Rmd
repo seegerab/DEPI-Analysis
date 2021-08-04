@@ -63,7 +63,7 @@ library(viridis)
 Next, load in the data. This data includes all gene families - we will later filter to only select B1B3, B1, and B3 genotypes. This data file includes both the Decruary and December data. 
 
 ```{r load_depi_data}
-depi_data <-read.table("DEPI_analysis_Seeger.txt", sep = ",", header = FALSE)
+depi_data <-read.table("DEPI_Dec_Feb.txt", sep = ",", header = FALSE)
 head(depi_data)
 
 

@@ -20,9 +20,8 @@ library(tidyr)
 library(ggthemes)
 library(extrafont)
 library(stringi)
-### Read in the data
-### Note: this is using the data updated July 1, 2021
-data <- read.delim("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/MAPK_DEPI_data_070121.txt", header = TRUE)
+### Read in the data that Melissa uploaded 7/22/2021 (this includes mpk5_17)
+data <- read.delim("C:/Users/Owner/Documents/Research/Shiu_Lab/Shiu_Lab_R/Data/MAPK_DEPI_data_072321.txt", header = TRUE)
 #Make sure flat, row, column, and genotype are coded as factors
 data$Flat<-as.factor(data$Flat)
 data$Row<-as.factor(data$Row)
@@ -44,13 +43,6 @@ MeasuredValue_NA_ID <- MeasuredValue_NA_ID[MeasuredValue_NA_ID != "DEPI1_2_92"]
 ### Remove this ID's from the data frame:
 data <- data%>%
   filter(!(ID %in% MeasuredValue_NA_ID))
-### Now, the only remained NA values should be DEPI1_2_92 for SPF and TSC
-### Verify this:
-sum(is.na(data$SPF))
-sum(is.na(data$TSC))
-### Replace these remaining NA values with 0 
-data$SPF[is.na(data$SPF)] <- 0  
-data$TSC[is.na(data$TSC)] <- 0  
 ### Create a data frame with the outliers removed
 data_outliers_removed <- data%>%
   ###Group by experiment and genotype
@@ -86,7 +78,9 @@ data_outliers_removed%>%
 data_outliers_removed%>%
   group_by(Experiment)%>%
   summarize(PropOutlier = sum(is.na(SN)) / length(SN))
-
+### Remove the rows that have NA values
+data_outliers_removed <- data_outliers_removed%>%
+  na.omit()
 ####################################################################################
 # Quantile normalization - flat level
 ####################################################################################
@@ -162,9 +156,11 @@ for (i in c("SN", "TSC", "SPF")){
 ### First, start with a test so I know this is the correct method to use. 
 
 ###Filter to only include Flat 2 and DEPI1 from the data frame with the outliers removed 
-test <- subset(data_outliers_removed, Flat == 2 & Experiment == "DEPI1")
+test <- (data_outliers_removed%>%
+  filter(Flat == 2, Experiment == "DEPI2"))
+
 ###Add a column with the normalized value. These normalized values are the second column, with the string of NA values removed from the column
-test$NormalizedSN <- depi1_SN_normalize[,2][1:132]
+test$NormalizedSN <- depi2_SN_normalize[,2][1:121]
 ###Add a column with the count to the data frame
 test$Count <- 1:nrow(test)
 ###Sort first by quantile normalized value, and then by the un-normalized value. Because the order is maintained when we quantile normalized, this should be the same data frame!
@@ -282,6 +278,7 @@ write.csv(NormalizedData, file = "Fitness_NormalizedValues_OutliersRemoved_07212
 ### Repeat the above process, WITHOUT removing the outliers
 ####################################################################################
 ####################################################################################
+
 
 ###Create a loop for each measurement and experiment
 for (i in c("SN", "TSC", "SPF")){
@@ -449,5 +446,6 @@ NormalizedData <- rbind(DEPI1_SN,
                         DEPI3_TSC
 )
 ### SAVE THESE NORMALIZED VALUES TO USE IN LATER SCRIPTS. REMEMBER, THIS IS WITHOUT REMOVING THE OUTLIERS
-write.csv(NormalizedData, file = "Fitness_NormalizedValues_OutliersIncluded_07212021.csv")
+write.csv(NormalizedData, file = "Fitness_NormalizedValues_OutliersIncluded_07302021.csv")
+
 

@@ -60,7 +60,7 @@ for (j in unique(data$Experiment)){
     quantile_matrix[row_count, 2] <- k
     ### Add the 2.5% percentile of the 10000 bootstrap values to the third column
     quantile_matrix[row_count, 3] <- quantile(temp_mean_deviation_vector, probs = c(0.025))
-    ### Add the 97.5% percentile of the 10000 boostrap values to the fourth column
+    ### Add the 97.5% percentile of the 10000 bootstrap values to the fourth column
     quantile_matrix[row_count, 4] <- quantile(temp_mean_deviation_vector, probs = c(0.975))
     ### Re-assign the row_count variable so the next iteration populates the next row in the matrix
     row_count <- row_count + 1

@@ -254,13 +254,12 @@ heatmap_data_binned <- exceeds_quantile_df[, 1:39]%>%
   )%>%
   ### Remove the rows with Col, because the selection coefficient is always 0
   ### There is no biological meaning because Col is compared to itself
-  filter(genotype != "Col")
-# set up cut-off values for the bins 
-### NOTE: -1000 represents the selection coeffients that are less than 0.025 quantile
-### 1000 represents the selection coefficients that exceed the 0.975 quantile
-breaks <- c(-1200,-0.4,-0.3,-0.2,-0.1,0,0.1,0.2, 0.3, 1200)
+  filter(genotype != "Col")### Create the bins:
+### set up cut-off values 
+### NOTE: -1000 represents the selection coeffients that are less than 0.025 quantile and 1000 represents the selection coefficients that exceed the 0.975 quantile
+breaks <- c(-1200,-0.4,-0.1,0.1, 0.3, 1200)
 # specify interval/bin labels
-tags <- c("Lower than 0.025 Quantile","[-0.04, -0.3)", "[-0.3, -0.2)", "[-0.2, -0.1)", "[-0.1, 0)", "[0, 0.1)","[0.1, 0.2)", "[0.2, 0.3)","Exceeds 0.975 Quantile")
+tags <- c("Lower than 0.025 Quantile","[-0.04, -0.1)", "[-0.1, 0.1)", "[0.1, 0.04)","Exceeds 0.975 Quantile")
 # bucketing values into bins
 group_tags <- cut(heatmap_data_binned$selectionCoef, 
                   breaks=breaks, 
@@ -269,7 +268,7 @@ group_tags <- cut(heatmap_data_binned$selectionCoef,
                   labels=tags)
 # inspect bins
 summary(group_tags)
-### Add a column "bins" to the data frame with the group_tags
+### Add a columns "bins" to the data frame with the group_tags and convert to a factor
 heatmap_data_binned$bins <- as.factor(group_tags)
 ### Apply the add_number function above to the data frame
 heatmap_data_binned <- add_number(heatmap_data_binned)
@@ -279,6 +278,13 @@ heatmap_data_binned$genotype <- reorder(heatmap_data_binned$genotype, heatmap_da
 heatmap_binned_sn <- filter(heatmap_data_binned, Measurement == "SN")
 heatmap_binned_tsc <- filter(heatmap_data_binned, Measurement == "TSC")
 heatmap_binned_spf <- filter(heatmap_data_binned, Measurement == "SPF")
+### Create a color palette with white in the middle and blue and red at the extremes
+### This palettes is specifically for the 5 bins
+col.palette <- rev(c("#FF0000", 
+                     "#FFCCCB",
+                     "#FFFEFE",
+                     "#D4EBF2",
+                     "#0000FF"))
 ### Create binned SN heatmap
 ggplot(data = heatmap_binned_sn, aes(x = Experiment, y = genotype, fill = bins)) + 
   labs(fill = "Selection Coefficient", x = "Experiment", y = NULL, title = "Selection Coefficients for SN")+
@@ -289,7 +295,7 @@ ggplot(data = heatmap_binned_sn, aes(x = Experiment, y = genotype, fill = bins))
         strip.text.y = element_blank(),
         
         panel.spacing=unit(0, "lines"))+
-  scale_fill_manual(values = c("blue", cm.colors(length(unique(heatmap_binned_sn$bins)) - 2) , "red"))
+  scale_fill_manual(values = col.palette)
 
 ### Create binned TSC heat map
 ggplot(data = heatmap_binned_tsc, aes(x = Experiment, y = genotype, fill = bins)) + 
@@ -301,7 +307,7 @@ ggplot(data = heatmap_binned_tsc, aes(x = Experiment, y = genotype, fill = bins)
         strip.text.y = element_blank(),
         
         panel.spacing=unit(0, "lines"))+
-  scale_fill_manual(values = c("blue", cm.colors(length(unique(heatmap_binned_tsc$bins)) - 1)))
+  scale_fill_manual(values = col.palette)
 
 ### Create binned SPF heat map
 ggplot(data = heatmap_binned_spf, aes(x = Experiment, y = genotype, fill = bins)) + 
@@ -313,5 +319,5 @@ ggplot(data = heatmap_binned_spf, aes(x = Experiment, y = genotype, fill = bins)
         strip.text.y = element_blank(),
         
         panel.spacing=unit(0, "lines"))+
-  scale_fill_manual(values = c("blue", cm.colors(length(unique(heatmap_binned_spf$bins)) - 2), "red"))
+  scale_fill_manual(values = col.palette)
 

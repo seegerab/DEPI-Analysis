@@ -177,6 +177,74 @@ for(e in c("DEPI1", "DEPI2", "DEPI3")){
   }
 }
 
+### Add a column with the normalization scheme
+geneticInteractions <- geneticInteractions%>%
+  mutate(Normalization = "ByFlat")
+
+####################################################################################
+### Genetic Interationcs Calculations - Repeat with Normalization by Exp
+####################################################################################
+
+### Read in the data that is normalized by experiment
+normByExp <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/Fitness_NormalizedValuesByExp_OutliersIncluded_07232021.csv", header = TRUE, row.names = 1)
+
+###Initialize an empty data frame to populate with information:
+geneticInteractionsExp <- data.frame(DoubleMutant = rep(NA, 0), 
+                                  MutantA = rep(NA, 0),
+                                  MutantB = rep(NA, 0), 
+                                  AdditiveEpistasis = rep(NA, 0),
+                                  ProportionalEpistatis = rep(NA, 0),
+                                  Experiment = rep(NA,0),
+                                  Measurement = rep(NA, 0))
+
+###Loop through each measurement:
+for (m in c("SN", "TSC", "SPF")){
+    ###Filter to each specific experiment and measurement
+    tempData <- filter(normByExp, Measurement == m)
+    ###Create an empty data frame to fill with the information and calcuations:
+    geneticInteractionsTmp <- data.frame(DoubleMutant = rep(NA, 25), 
+                                         MutantA = rep(NA, 25),
+                                         MutantB = rep(NA, 25), 
+                                         AdditiveEpistasis = rep(NA, 25),
+                                         ProportionalEpistatis = rep(NA, 25),
+                                         Experiment = rep(NA, 25),
+                                         Measurement = rep(NA, 25))
+    ###Initialize a row count to use to populate the data frame
+    rowCount <- 1  
+    ###For each of the double mutants:
+    for (dm in unlist(all_double_mutants)){
+      ###Extract the single mutants from the double mutant
+      ma <- unlist(strsplit(dm, "_"))[1]
+      mb <- paste("mpk", unlist(strsplit(dm, "_"))[2], sep = "")
+      ###Calculate the fitness of the dm, ma, mb, and wt
+      fdm <- mean(filter(tempData, Genotype == dm)$NormalizedExp)
+      fwt <- mean(filter(tempData, Genotype == "Col")$NormalizedExp)
+      fma <- mean(filter(tempData, Genotype == ma)$NormalizedExp)
+      fmb <- mean(filter(tempData, Genotype == mb)$NormalizedExp)
+      ###Calculate Additive and Proportional Epistasis
+      AddEp <- fdm + fwt - (fma + fmb)
+      PropEp <- log((fdm * fwt)/ (fma * fmb))
+      ###Populate the data frame with this information:
+      geneticInteractionsTmp[rowCount, 1] <- dm
+      geneticInteractionsTmp[rowCount, 2] <- ma
+      geneticInteractionsTmp[rowCount, 3] <- mb
+      geneticInteractionsTmp[rowCount, 4] <- AddEp
+      geneticInteractionsTmp[rowCount, 5] <- PropEp
+      geneticInteractionsTmp[rowCount, 6] <- "Doesn't Apply"
+      geneticInteractionsTmp[rowCount, 7] <- m
+      rowCount <- rowCount + 1
+    }
+    ###Add the rows of the temporary genetic interaction information to the main data frame
+    geneticInteractionsExp <- rbind(geneticInteractionsExp, geneticInteractionsTmp)
+  
+}
+### Add a column with the normalization scheme
+geneticInteractionsExp <- geneticInteractionsExp%>%
+  mutate(Normalization = "ByExp")
+
+### Combine the data frames
+geneticInteractionsAll <- rbind(geneticInteractions, geneticInteractionsExp)
+
 ####################################################################################
 ### Selection Coefficient Calculations
 ####################################################################################
@@ -217,12 +285,63 @@ for(e in c("DEPI1", "DEPI2", "DEPI3")){
   }
 }
 selectionCoef <- selectionCoef%>%
-  arrange(Measurement, Mutant)
+  arrange(Measurement, Mutant)%>%
+  mutate(Normalization = "ByFlat")
+
+
+####################################################################################
+### Selection Coefficient Calculations - Repeat with Normalization by Exp
+####################################################################################
+
+normByExp <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/Fitness_NormalizedValuesByExp_OutliersIncluded_07232021.csv", header = TRUE, row.names = 1)
+
+###Initialize an empty data frame to populate with information:
+selectionCoefExp <- data.frame(Mutant = rep(NA, 0), 
+                           SelectionCoefficient = rep(NA, 0),
+                           Measurement = rep(NA, 0))
+
+for (m in c("SN", "TSC", "SPF")){
+    ###Create an empty data frame to fill with the information and calcuations:
+    selectionCoefTmp <- data.frame(Mutant = rep(NA, 38), 
+                                   SelectionCoefficient = rep(NA, 38),
+                                   Experiment = rep(NA, 38), 
+                                   Measurement = rep(NA, 38))
+    ### Initialize a row count to be 1
+    count <- 1
+    ### For each genotype
+    for (g in unique(normByExp$Genotype)){
+      ### Compute the mean fitness of the mutant
+      fm <- mean(filter(normByExp, Genotype == g, Measurement == m)$NormalizedExp)
+      ### Compute the mean fitness of wild type
+      fwt <- mean(filter(normByExp, Genotype == "Col", Measurement == m)$NormalizedExp)
+      ### Calculate the selection coefficient using these values
+      TempSelectionCoef <- (fm - fwt) / fwt
+      ### Populate the row of the data frame with genotype, selection coefficient, experiment, and measurement
+      selectionCoefTmp[count, 1] <- g
+      selectionCoefTmp[count, 2] <- TempSelectionCoef
+      selectionCoefTmp[count, 3] <- e
+      selectionCoefTmp[count, 4] <- m
+      ### Increase row count variable by 1
+      count <- count + 1
+    }
+    ### Once each genotype has been iterated through, bind the rows of the temp data frames for these measurements to the main data frame
+    selectionCoefExp <- rbind(selectionCoefExp, selectionCoefTmp)
+  
+}
+selectionCoefExp <- selectionCoefExp%>%
+  arrange(Measurement, Mutant)%>%
+  mutate(Normalization = "ByExp")
+
+### Finally, combine the calculations based on normalization scheme
+
+selectionCoefAll <- rbind(selectionCoef, selectionCoefExp)
 
 ####################################################################################
 ### Plot Selection Coefficients
 ####################################################################################
 
+### Filter the selection coefficient to only have the values based on the normalization by flat
+selectionCoef <- filter(selectionCoef, Normalization == "ByFlat")
 ### Include columns with number and number2 to sort genotypes in the plots
 selectionCoef <- add_number(selectionCoef)
 selectionCoef$Mutant <- reorder(selectionCoef$Mutant, desc(selectionCoef$number))
@@ -268,6 +387,9 @@ for (i in 1:3) {
 ### Plot Genetic Interactions
 ####################################################################################
 
+
+### Filter genetic interactions to only have the values based on the normalization by flat
+geneticInteractions <- filter(geneticInteractionsAll, Normalization == "ByFlat")
 ### Include a column with number and number2 for plotting purposes
 geneticInteractions <- add_number2(geneticInteractions)
 geneticInteractions$DoubleMutant <- reorder(geneticInteractions$DoubleMutant, desc(geneticInteractions$number))
@@ -351,17 +473,20 @@ for (i in 1:3) {
 ####################################################################################
 
 ###Remove the number and number2 columns (these were used to sort the plots correctly)
-geneticInteractions <- geneticInteractions%>%
-  select(-c("number", "number_2"))%>%
+geneticInteractionsFinal <- geneticInteractionsAll%>%
   rename(AdditiveEp_OutliersIncluded = AdditiveEpistasis,
-         PropEp_OutliersIncluded = ProportionalEpistatis)
-selectionCoef <- selectionCoef%>%
-  select(-c("number", "number_2"))%>%
-  rename(SC_OutliersIncluded = SelectionCoefficient)
+         PropEp_OutliersIncluded = ProportionalEpistatis)%>%
+  na.omit()
+
+
+
+selectionCoefFinal <- selectionCoefAll%>%
+  rename(SC_OutliersIncluded = SelectionCoefficient)%>%
+  na.omit()
 
 ###Write to .csv files:
-write.csv(geneticInteractions, file = "epistasis_07222021_OutliersIncluded.csv", row.names = FALSE)
-write.csv(selectionCoef, file = "selectionCoefficients_07222021_OutliersIncluded.csv", row.names = FALSE)
+write.csv(geneticInteractionsFinal, file = "epistasis_07292021_OutliersIncluded.csv", row.names = FALSE)
+write.csv(selectionCoefFinal, file = "selectionCoefficients_07292021_OutliersIncluded.csv", row.names = FALSE)
 
 ####################################################################################
 ### Calculate p-values for fitness measurements (SN, TSC, SPF)

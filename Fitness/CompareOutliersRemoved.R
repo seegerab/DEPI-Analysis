@@ -63,19 +63,24 @@ ep.data <- left_join(ep_OutliersIncluded, ep_OutliersRemoved, by = c("Experiment
 
 ### Change the df with col name Mutant to have col name Genotype
 
-### Add a column with "number" to sort the Genotypes by 
-pval.data <- add_number(pval.data)
+### Add a column with "number" to sort the Genotypes by
+### And, remove any rows that have NA values (these should only be rows full on NAs at the bottom of the df)
+pval.data <- add_number(pval.data)%>%
+  na.omit()
 sc.data <- sc.data%>%
   rename(Genotype = Mutant)%>%
-  add_number()
+  add_number()%>%
+  na.omit()
 ep.data <- ep.data%>%
   rename(Genotype = DoubleMutant)%>%
-  add_number()
+  add_number()%>%
+  na.omit()
+
 
 ### Re-order the Genotypes by "number
 pval.data$Genotype <- reorder(pval.data$Genotype, desc(pval.data$number))
 sc.data$Genotype <- reorder(sc.data$Genotype, desc(sc.data$number))
-ep.data$Genotype <- reorder(ep.data$Genotype, desc(ep.data$number))
+ep.data$Genotype <- reorder(ep.data$Genotype, desc(ep.data$number)) 
 
 ####################################################################################
 # 
@@ -131,13 +136,21 @@ ggplot(data = ep.data, aes(x = Experiment, y = Genotype, fill = prop.ep.diff))+
   facet_grid(~Measurement)+
   labs(fill = "prop. ep. (outliers included) - \nprop. ep. (outliers removed)")+
   scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
-### Plot the differences in proportional epistasis by measurement
-ggplot(data = sc.data, aes(x = Experiment, y = Genotype, fill = sc.diff))+
+
+### Plot the differences in selection coefficient by measurement
+ggplot(data = sc.data, aes(x = Experiment, y = Genotype, fill = sc.diff ))+
   geom_tile()+
   facet_grid(~Measurement)+
+  #labs(fill = "SC")+
   labs(fill = "selection coef. (outliers included) - \nselection coef. (outliers removed)")+
   scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
 
+### Here, plot the selection coefficients with the outliers included
+ggplot(data = sc.data, aes(x = Experiment, y = Genotype, fill = SC_OutliersIncluded))+
+  geom_tile()+
+  facet_grid(~Measurement)+
+  labs(fill = "SC")+
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
 
 
 

@@ -78,7 +78,7 @@ corrected_p_value <- function(data_frame){
 ### P-value calculation
 ####################################################################################
 ### Read in the data
-data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/Fitness_NormalizedValuesByExp_OutliersIncluded_07302021.csv", header = TRUE, row.names = 1)
+data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/Fitness_NormalizedValuesByExp_OutliersIncluded_07302021.csv", header = TRUE, row.names = 1)
 ### Apply the p_values function to the data
 p_values <- p_value(data)  
 ### Adjust the p-values using an FDR correction
@@ -91,7 +91,7 @@ write.csv(adjusted_p_values, "PValues_NormalizedByFlatThenExp_07232021.csv", row
 ### Add a column with a boolean indicating if the adjusted p-value is significant or not
 adjusted_p_values$significant_ByExp <- adjusted_p_values$p_adj_ByExp < 0.05
 ### Read in the p-value data from the normalization by flat, not exp
-pVal_NormalizedFlat <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/FitnessPValues_07222021_OutliersRemoved.csv", header = TRUE, row.names = 1)
+pVal_NormalizedFlat <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/FitnessPValues_07222021_OutliersRemoved.csv", header = TRUE, row.names = 1)
 
 ####################################################################################
 ### Compare p-values between normalization schemes
@@ -152,8 +152,8 @@ ggplot(scatterplotData, aes(x=p_adj_ByExp, y=p_adj_OutliersRemoved)) +
 ####################################################################################
 
 ### Read in the data with the outliers included
-sc.data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/selectionCoefficients_07292021_OutliersIncluded.csv", header = TRUE)
-ep.data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/epistasis_07292021_OutliersIncluded.csv", header = TRUE)
+sc.data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/selectionCoefficients_07292021_OutliersIncluded.csv", header = TRUE)
+ep.data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/epistasis_07292021_OutliersIncluded.csv", header = TRUE)
 
 ### This gives 3 total plots: a grid of SC for TSC, SPF, and SN
 for (i in c("SN", "TSC", "SPF")){
@@ -277,7 +277,7 @@ for (i in c("SN", "TSC", "SPF")){
 ####################################################################################
 ### Bootstrapping - Col0
 ####################################################################################
-data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/Fitness_NormalizedValuesByExp_OutliersRemoved_07232021.csv", header = TRUE, row.names = 1)
+data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/Fitness_NormalizedValuesByExp_OutliersRemoved_07232021.csv", header = TRUE, row.names = 1)
 ### Set the graphing parameters to have 3 rows and 3 columns of plots
 par(mfrow = c(1, 3))
 ### Initialize a matrix to populate with the 2.5% quantile and 97.5% quantile for each experiment and measurement
@@ -484,7 +484,7 @@ ggplot(data = heatmap_data_binned, aes(x = Measurement, y = Genotype, fill = bin
 ####################################################################################
 # Here, do Bootstrapping for each genotype, and compare the distribution to Col0
 ####################################################################################
-data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/Fitness_NormalizedValuesByExp_OutliersIncluded_07302021.csv", header = TRUE, row.names = 1)
+data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/Fitness_NormalizedValuesByExp_OutliersIncluded_07302021.csv", header = TRUE, row.names = 1)
 ### For each measurement
 for (j in unique(data$Measurement)){
   ### Filter to extract the normalized measured values of Col0 for that measurement and experiment
@@ -533,8 +533,8 @@ for (j in unique(data$Measurement)){
        xlab = " ",
        main = paste(j,": Col0 and ", k, " Density", sep = ""),
        col = "red",
-       lty = 2,
-       ylim = max(max(Col0Density$y, GenotypeDensity$y)))
+       lty = 2)
+       # ylim = max(Col0Density$y, GenotypeDensity$y))
   lines(GenotypeDensity,
        xlab = " ",
        main = paste(j, "Col0", sep = " "),

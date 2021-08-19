@@ -82,34 +82,7 @@ add_number2 <- function(data_frame){
 
 ####################################################################################
 ### Visualize Normalization
-####################################################################################
 
-### Convert the flat column to a factor
-data$Flat <- as.factor(data$Flat)
-###Visualize the normalization to make sure quantile normalized flats have the same distribution for all experiments
-for (i in c("DEPI1", "DEPI2", "DEPI3")){
-  for (m in c("TSC", "SN", "SPF")){
-    plotData <- data%>%
-      filter(Measurement == m , Experiment == i)
-    title1 <- paste(i, m, "- Before Normalization", sep = " ")
-    title2 <- paste(i, m, "- After Normalization", sep = " ")
-    plot1 <- ggplot(data = plotData, aes(x = Measured_Value, color = Flat))+
-      geom_density()+
-      stat_density(geom = "line", position = "identity")+
-      theme_linedraw()+
-      labs(x = m,
-           y = "Density",
-           title = title1)
-    plot2 <- ggplot(data = plotData, aes(x = NormalizedMeasuredValue, color = Flat))+
-      geom_density()+
-      stat_density(geom = "line", position = "identity")+
-      theme_linedraw()+
-      labs(x = paste(m ,"Normalized by Flat", sep = " "),
-           y = "Density",
-           title = title2)
-    grid.arrange(plot1, plot2)
-  } 
-}
 
 ### Generally I'm happy with these distributions, although SN seems less in alignment than the other measurements 
 

@@ -179,6 +179,7 @@ for(e in c("DEPI1", "DEPI2", "DEPI3")){
 
 ### Add a column with the normalization scheme
 geneticInteractions <- geneticInteractions%>%
+  na.omit()%>%
   mutate(Normalization = "ByFlat")
 
 ####################################################################################
@@ -345,41 +346,29 @@ selectionCoef <- filter(selectionCoef, Normalization == "ByFlat")
 ### Include columns with number and number2 to sort genotypes in the plots
 selectionCoef <- add_number(selectionCoef)
 selectionCoef$Mutant <- reorder(selectionCoef$Mutant, desc(selectionCoef$number))
-### Initialize an empty file name list
-SelectionFileNameList <- c()
-### Initialize an empty list to populate with the plots
-SelectionPlots <- list()
 ### Initialize a count set to 1
 count <- 1
 ### For each measurement 
 for (m in c("SN", "TSC", "SPF")){ 
   ### Create a plot title
   tmpTitle <- paste("Selection Coefficient - ", m, sep = "")
-  ### Append a file name in the form Selectionm.tiff, where m is either SN, TSC, or SPF to the file name list
-  SelectionFileNameList[count] <- paste("Selection", m, ".tiff", sep = "")
   ### Create the plot
-  plot <- ggplot(data = filter(selectionCoef, Measurement == m), aes(x = Experiment, y = Mutant, fill = SelectionCoefficient))+
+  plot <- ggplot(data = filter(selectionCoef, Measurement == m, Mutant != "Col"), aes(x = Experiment, y = Mutant, fill = SelectionCoefficient))+
     geom_tile()+
     labs(x = "",
          y = "Genotype",
          title = tmpTitle)+
     theme_tufte(base_family = "Calibri")+
     scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-0.55, .5), breaks = c(-0.55, 0, 0.5), labels = c("-0.55", "0", "0.5"))
-  ### Append the plot to the plot list
-  SelectionPlots[[count]] <- plot
   ### Increase the count by 1
   count <- count + 1
   ### Print the plot
+  tiff(paste(m, "SelectionCoefficient_OutliersIncluded_NormFlat.tiff", sep = ""),
+       res = 450,
+       units = "in",
+       width = 5,
+      height = 5)
   print(plot)
-}
-### For each of the three plots just created
-for (i in 1:3) {
-  ### Set the file name to be the ith element in the SelectionFileNameList
-  file_name = SelectionFileNameList[i]
-  ### Use tiff() and the file_name to set the parameters for saving the plot
-  tiff(file_name, units = "in", width = 7, height = 7, res = 500)
-  ### Print the ith plot in SelectionPlots list 
-  print(SelectionPlots[[i]])
   dev.off()
 }
 
@@ -393,18 +382,14 @@ geneticInteractions <- filter(geneticInteractionsAll, Normalization == "ByFlat")
 ### Include a column with number and number2 for plotting purposes
 geneticInteractions <- add_number2(geneticInteractions)
 geneticInteractions$DoubleMutant <- reorder(geneticInteractions$DoubleMutant, desc(geneticInteractions$number))
-### Initialize an empty vector to populate with file names
-AddEpFileNameList <- c()
-### Initialize an empty list to populate with the plots
-additiveEpistasisPlots <- list()
 ### Set a count to be 1
 count <- 1
 ### For each measurement 
 for (m in c("SN", "TSC", "SPF")){
   ### Create a title for the plot
   tmpTitle <- paste("Additive Epistasis - ", m, sep = "")
-  ### Append this title to the ith element of the file name list
-  AddEpFileNameList[count] <- paste("AdditiveEpistasis", m, ".tiff", sep = "")
+  lowerBound <- floor(min(filter(geneticInteractions, Measurement == m)$AdditiveEpistasis))
+  upperBound <- ceiling(max(filter(geneticInteractions, Measurement == m)$AdditiveEpistasis))
   ### Create the plot
   plot <- ggplot(data = filter(geneticInteractions, Measurement == m), aes(x = Experiment, y = DoubleMutant, fill = AdditiveEpistasis))+
     geom_tile()+
@@ -412,36 +397,25 @@ for (m in c("SN", "TSC", "SPF")){
          y = "Genotype",
          title = tmpTitle)+
     theme_tufte(base_family = "Calibri")+
-    scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-85, 85), breaks = c(-85, 0, 85), labels = c("-85", "0", "85"))
+    scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(lowerBound, upperBound), breaks = c(lowerBound, 0, upperBound), labels = c(as.character(lowerBound), "0", as.character(upperBound)))
   ### Print the plot
+  tiff(paste(m, "AdditiveEpistasis_OutliersIncluded_NormFlat.tiff", sep = ""),
+       res = 450,
+       units = "in",
+       width = 5,
+       height = 5)
   print(plot)
-  ### Append the plot to the plot list
-  additiveEpistasisPlots[[count]] <- plot
+  dev.off()
   ### Increase the count by 1 
   count <- count + 1
 }
-### For each plot
-for (i in 1:3) {
-  ### Set file_name to be the ith element of the file name list
-  file_name = AddEpFileNameList[i]
-  ### Set the parameters of tiff to save the plot as an image
-  tiff(file_name, units = "in", width = 7, height = 7, res = 500)
-  ### Print the ith plot
-  print(additiveEpistasisPlots[[i]])
-  dev.off()
-}
-### Initialize an empty vector for the file names
-PropEpFileNameList <- c()
-### Initialize an empty list for the plots
-proportionalEpistasisPlots <- list()
-### Set a count to be 1
-count <- 1
+
 ### For each measurement 
 for (m in c("SN", "TSC", "SPF")){
   ### Create a title for the plot
   tmpTitle <- paste("Proportional Epistasis - ", m, sep = "")
-  ### Create a file name for the plot and appent to the file name vector
-  PropEpFileNameList[count] <- paste("ProportionalEpistasis", m, ".tiff", sep = "")
+  lowerBound <- floor(min(filter(geneticInteractions, Measurement == m)$ProportionalEpistatis) * 100) / 100
+  upperBound <- ceiling(max(filter(geneticInteractions, Measurement == m)$ProportionalEpistatis) * 100) / 100
   #### Create the plot
   plot <- ggplot(data = filter(geneticInteractions, Measurement == m), aes(x = Experiment, y = DoubleMutant, fill = ProportionalEpistatis))+
     geom_tile()+
@@ -449,22 +423,14 @@ for (m in c("SN", "TSC", "SPF")){
          y = "Genotype",
          title = tmpTitle)+
     theme_tufte(base_family = "Calibri")+
-    scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(-0.51, 0.74), breaks = c(-0.51, 0, 0.74), labels = c("-0.51", "0", "0.74"))
+    scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0, limits = c(lowerBound, upperBound), breaks = c(lowerBound, 0, upperBound), labels = c(as.character(lowerBound), "0", as.character(upperBound)))
   ### Print the plot
+  tiff(paste(m, "ProportionalEpistasis_OutliersIncluded_NormFlat.tiff", sep = ""),
+       res = 450,
+       units = "in",
+       width = 5,
+       height = 5)
   print(plot)
-  ### Append the plot to the plot list
-  proportionalEpistasisPlots[[count]] <- plot
-  ### Increase the count by 1
-  count <- count + 1
-}
-### For each plot
-for (i in 1:3) {
-  ### Extract the ith element from the file name list
-  file_name = PropEpFileNameList[i]
-  ### Set the parameters for saving the plot as a tiff
-  tiff(file_name, units = "in", width = 7, height = 7, res = 500)
-  ### Print the ith element of the plot list
-  print(proportionalEpistasisPlots[[i]])
   dev.off()
 }
 
@@ -477,8 +443,6 @@ geneticInteractionsFinal <- geneticInteractionsAll%>%
   rename(AdditiveEp_OutliersIncluded = AdditiveEpistasis,
          PropEp_OutliersIncluded = ProportionalEpistatis)%>%
   na.omit()
-
-
 
 selectionCoefFinal <- selectionCoefAll%>%
   rename(SC_OutliersIncluded = SelectionCoefficient)%>%

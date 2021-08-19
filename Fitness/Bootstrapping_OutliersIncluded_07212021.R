@@ -16,6 +16,7 @@ data <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/Data/Fitness_NormalizedValues_O
 ####################################################################################
 ### Bootstrapping - Col0
 ####################################################################################
+
 ### Set the graphing parameters to have 3 rows and 3 columns of plots
 par(mfrow = c(3, 3))
 ### Initialize a matrix to populate with the 2.5% quantile and 97.5% quantile for each experiment and measurement
@@ -54,10 +55,10 @@ for (j in unique(data$Experiment)){
     ### Create a histogram of these 1,000 deviations from the mean
     ### Un-comment the next three lines to code to plot the histograms 
     ### Note: if this throws an error while plotting, the matrix population may be aborted!
-    # hist(temp_mean_deviation_vector, 
-    #      xlab = " ",
-    #      main = paste(j, k, sep = " "))
-    # 
+    hist(temp_mean_deviation_vector,
+         xlab = " ",
+         main = paste(j, k, sep = " "))
+
     ### Add the experiment to the first column
     quantile_matrix[row_count, 1] <- j
     ### Add the measurement to the second column
@@ -286,7 +287,7 @@ col.palette <- rev(c("#FF0000",
                      "#D4EBF2",
                      "#0000FF"))
 ### Create binned SN heatmap
-ggplot(data = heatmap_binned_sn, aes(x = Experiment, y = genotype, fill = bins)) + 
+plot <- ggplot(data = heatmap_binned_sn, aes(x = Experiment, y = genotype, fill = bins)) + 
   labs(fill = "Selection Coefficient", x = "Experiment", y = NULL, title = "Selection Coefficients for SN")+
   geom_tile()+
   theme_tufte(
@@ -296,9 +297,15 @@ ggplot(data = heatmap_binned_sn, aes(x = Experiment, y = genotype, fill = bins))
         
         panel.spacing=unit(0, "lines"))+
   scale_fill_manual(values = col.palette)
-
+tiff("Binned_SC_SN_NormFlat.tiff",
+     res = 400,
+     units = "in",
+     width = 7,
+     height = 7)
+print(plot)
+dev.off()
 ### Create binned TSC heat map
-ggplot(data = heatmap_binned_tsc, aes(x = Experiment, y = genotype, fill = bins)) + 
+plot <- ggplot(data = heatmap_binned_tsc, aes(x = Experiment, y = genotype, fill = bins)) + 
   labs(fill = "Selection Coefficient", x = "Experiment", y = NULL, title = "Selection Coefficients for TSC")+
   geom_tile()+
   theme_tufte(
@@ -308,9 +315,15 @@ ggplot(data = heatmap_binned_tsc, aes(x = Experiment, y = genotype, fill = bins)
         
         panel.spacing=unit(0, "lines"))+
   scale_fill_manual(values = col.palette)
-
+tiff("Binned_SC_TSC_NormFlat.tiff",
+     res = 400,
+     units = "in",
+     width = 7,
+     height = 7)
+print(plot)
+dev.off()
 ### Create binned SPF heat map
-ggplot(data = heatmap_binned_spf, aes(x = Experiment, y = genotype, fill = bins)) + 
+plot <- ggplot(data = heatmap_binned_spf, aes(x = Experiment, y = genotype, fill = bins)) + 
   labs(fill = "Selection Coefficient", x = "Experiment", y = NULL, title = "Selection Coefficients for SPF")+
   geom_tile()+
   theme_tufte(
@@ -320,4 +333,10 @@ ggplot(data = heatmap_binned_spf, aes(x = Experiment, y = genotype, fill = bins)
         
         panel.spacing=unit(0, "lines"))+
   scale_fill_manual(values = col.palette)
-
+tiff("Binned_SC_SPF_NormFlat.tiff",
+     res = 400,
+     units = "in",
+     width = 7,
+     height = 7)
+print(plot)
+dev.off()

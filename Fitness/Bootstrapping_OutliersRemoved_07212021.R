@@ -44,15 +44,15 @@ for (j in unique(data$Experiment)){
                ### Sample 1/2 of the number of Col0 plants (Should be about 7, though smaller in some cases)
                size = floor(length(temp_bootstrapping_data) / 2),
                ### Sample with replacement 
-               replace = TRUE) 
+               replace = FALSE) 
         ### Take the difference between the sample means and the mean of all Col0 plants for the jth experiment and kth measurement
         - mean(temp_bootstrapping_data)) / mean(temp_bootstrapping_data))
     }
     ### Create a histogram of these 1,000 deviations from the mean
     # Uncomment the lines of code below to plot (I ran into a problem with populating the matrix when I got an "increase plot window" error)
-    # hist(temp_mean_deviation_vector, 
-    #      xlab = " ",
-    #      main = paste(j, k, sep = " "))
+    hist(temp_mean_deviation_vector,
+         xlab = " ",
+         main = paste(j, k, sep = " "))
     
     ### Add the experiment to the first column
     quantile_matrix[row_count, 1] <- j

@@ -106,9 +106,9 @@ plotData$Genotype <- reorder(plotData$Genotype, desc(plotData$number))
 colnames(plotData) <- c("Experiment", "Genotype", "Measurement",
                         "p_ByFlat", "pAdj_ByFlat", "Significant_ByFlat",
                         "p_ByExp", "pAdj_ByExp", "Significant_ByExp", "number", "number2")
-### 1.9% of the p-values change from significant to not significant
+### 2.2% of the p-values change from significant to not significant
 sum(plotData$Significant_ByFlat ==  TRUE & plotData$Significant_ByExp == FALSE) / nrow(plotData)
-### 10.5% of the p-values change from not significant to significant
+### 14.5% of the p-values change from not significant to significant
 sum(plotData$Significant_ByFlat ==  FALSE & plotData$Significant_ByExp == TRUE) / nrow(plotData)
 ### Histogram of the differences between p-values between normalization schemes
 hist(plotData$pAdj_ByFlat - plotData$pAdj_ByExp,
@@ -129,13 +129,20 @@ plotData <- pivot_longer(plotData,
 ### Add a column for plotting purposes; this is binary based on the significance of the p-value
 plotData$sig <- ifelse(plotData$pAdj < 0.05, "p < 0.05", "p > 0.05")
 ### Plot the p-values from the two normalization schemes for each measurement and experiment
-ggplot(data = plotData, aes(x = Experiment, y = Genotype, fill = sig)) +
+plot <- ggplot(data = plotData, aes(x = Experiment, y = Genotype, fill = sig)) +
   geom_tile()+
   facet_grid(~Normalization_Method + Measurement)+
   labs(fill = "Adjusted P-Value")+
   theme_minimal()+
   theme(text=element_text(size=12, family="Calibri"))+
   scale_fill_manual(values = c("red", "black"))
+tiff("Compare_PVal_By_Normalization.tiff",
+     res = 400,
+     units = "in",
+     width = 7,
+     height = 7)
+print(plot)
+dev.off()
 
 ### Correlation of p-values between normalization schemes
 scatterplotData <- left_join(pVal_NormalizedFlat, adjusted_p_values, by = c("Experiment", "Genotype", "Measurement"))%>%

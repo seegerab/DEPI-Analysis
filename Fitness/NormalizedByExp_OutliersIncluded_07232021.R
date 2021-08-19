@@ -137,7 +137,7 @@ for (i in 1:3){
 
 ### Plot the data to see the distribution of the measured values before and after normalization by experiment
 plot1 <- ggplot(data = TSC.temp, aes(x = NormalizedMeasuredValue , color = Experiment))+
-  geom_density()+
+geom_density()+
   stat_density(geom = "line", position = "identity")+
   theme_linedraw()+
   labs(x = "Quantile Normalized Values by Flat",

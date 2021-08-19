@@ -47,12 +47,12 @@ library(stringi)
 
 ### Read in the 6 .csv files:
 
-pval_OutliersIncluded <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/FitnessPValues_07222021_OutliersIncluded.csv", header = TRUE, row.names = 1)
-pval_OutliersRemoved <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/FitnessPValues_07222021_OutliersRemoved.csv", header = TRUE, row.names = 1)
-sc_OutliersIncluded <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/selectionCoefficients_07222021_OutliersIncluded.csv", header = TRUE)
-sc_OutliersRemoved <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/selectionCoefficients_07222021_OutliersRemoved.csv", header = TRUE)
-ep_OutliersIncluded <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/epistasis_07222021_OutliersIncluded.csv", header = TRUE)
-ep_OutliersRemoved <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/epistasis_07222021_OutliersRemoved.csv", header = TRUE)
+pval_OutliersIncluded <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/FitnessPValues_07222021_OutliersIncluded.csv", header = TRUE, row.names = 1)
+pval_OutliersRemoved <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/FitnessPValues_07222021_OutliersRemoved.csv", header = TRUE, row.names = 1)
+sc_OutliersIncluded <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/selectionCoefficients_07222021_OutliersIncluded.csv", header = TRUE)
+sc_OutliersRemoved <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/selectionCoefficients_07222021_OutliersRemoved.csv", header = TRUE)
+ep_OutliersIncluded <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/epistasis_07222021_OutliersIncluded.csv", header = TRUE)
+ep_OutliersRemoved <- read.csv("~/Research/Shiu_Lab/Shiu_Lab_R/csvFiles/epistasis_07222021_OutliersRemoved.csv", header = TRUE)
 
 
 ### Merge the data frames with the outliers included and outliers removed. The column names should indicate which column has the outliers removed or included
@@ -91,26 +91,39 @@ ep.data$Genotype <- reorder(ep.data$Genotype, desc(ep.data$number))
 pval.data<- pval.data%>%
   mutate(pval.diff = p_adj_OutliersIncluded - p_adj_OutliersRemoved)
 
+tiff("PValue_Diff_OutlierComparison_Hist.tiff",
+     res = 450,
+     units = "in",
+     width = 5.5,
+     height = 5.5)
 par(mfrow = c(1,3 ))
 hist(filter(pval.data, Measurement == "SN")$pval.diff,
-     xlab = "p-val (outliers included) - p-val (outliers removed)",
+     xlab = "p-val (outliers included) - \np-val (outliers removed)",
      main = "SN p-value comparison",
      breaks = 15)
 hist(filter(pval.data, Measurement == "SPF")$pval.diff,
-     xlab = "p-val (outliers included) - p-val (outliers removed)",
+     xlab = "p-val (outliers included) - \np-val (outliers removed)",
      main = "SPF p-value comparison",
      breaks = 15)
 hist(filter(pval.data, Measurement == "TSC")$pval.diff,
-     xlab = "p-val (outliers included) - p-val (outliers removed)",
+     xlab = "p-val (outliers included) - \np-val (outliers removed)",
      main = "TSC p-value comparison",
      breaks = 15)
+dev.off()
 ### Plot the differences in p-values by measurement
-ggplot(data = pval.data, aes(x = Experiment, y = Genotype, fill = pval.diff))+
+plot <- ggplot(data = pval.data, aes(x = Experiment, y = Genotype, fill = pval.diff))+
   geom_tile()+
   facet_grid(~Measurement)+
   labs(fill = "pval (outliers included) - \npval (outliers removed)")+
   scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
-  
+tiff("PValue_Diff_OutlierComparison.tiff",
+     res = 450,
+     units = "in",
+     width = 6.5,
+     height = 6.5)
+print(plot)
+dev.off()
+
 ####################################################################################
 # 
 # Epistasis and Selection Coefficient Comparisons
@@ -125,25 +138,46 @@ sc.data <- sc.data%>%
   mutate(sc.diff = SC_OutliersIncluded - SC_OutliersRemoved)%>%
   na.omit()
 ### Plot the differences in additive epistasis by measurement
-ggplot(data = ep.data, aes(x = Experiment, y = Genotype, fill = add.ep.diff))+
+plot <- ggplot(data = ep.data, aes(x = Experiment, y = Genotype, fill = add.ep.diff))+
   geom_tile()+
   facet_grid(~Measurement)+
-  labs(fill = "add. ep. (outliers included) - \nadd. ep. (outliers removed)")+
+  labs(fill = "a. ep. (outliers included) - \na. ep. (outliers removed)")+
   scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
-### Plot the differences in proportional epistasis by measurement
-ggplot(data = ep.data, aes(x = Experiment, y = Genotype, fill = prop.ep.diff))+
-  geom_tile()+
-  facet_grid(~Measurement)+
-  labs(fill = "prop. ep. (outliers included) - \nprop. ep. (outliers removed)")+
-  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
+tiff("AddEpDiff_NormFlat.tiff",
+     res = 450,
+     units = "in",
+     width = 6.5,
+     height = 6.5)
+print(plot)
+dev.off()
 
+### Plot the differences in proportional epistasis by measurement
+plot <- ggplot(data = ep.data, aes(x = Experiment, y = Genotype, fill = prop.ep.diff))+
+  geom_tile()+
+  facet_grid(~Measurement)+
+  labs(fill = "p. ep. (outliers included) - \np. ep. (outliers removed)")+
+  scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
+tiff("PropEpDiff_NormFlat.tiff",
+     res = 450,
+     units = "in",
+     width = 6.5,
+     height = 6.5)
+print(plot)
+dev.off()
 ### Plot the differences in selection coefficient by measurement
-ggplot(data = sc.data, aes(x = Experiment, y = Genotype, fill = sc.diff ))+
+plot <- ggplot(data = sc.data, aes(x = Experiment, y = Genotype, fill = sc.diff ))+
   geom_tile()+
   facet_grid(~Measurement)+
   #labs(fill = "SC")+
-  labs(fill = "selection coef. (outliers included) - \nselection coef. (outliers removed)")+
+  labs(fill = "SC (outliers included) - \nSC (outliers removed)")+
   scale_fill_gradient2(low = "blue", high="red", mid = "white", midpoint = 0)
+tiff("SelectionCoefficientDiff_NormFlat.tiff",
+     res = 450,
+     units = "in",
+     width = 6.5,
+     height = 6.5)
+print(plot)
+dev.off()
 
 ### Here, plot the selection coefficients with the outliers included
 ggplot(data = sc.data, aes(x = Experiment, y = Genotype, fill = SC_OutliersIncluded))+
